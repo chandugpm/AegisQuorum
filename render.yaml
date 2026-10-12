@@ -1,0 +1,24 @@
+# Deliberately a private service: Render must not create a public node-administration endpoint.
+# Provision a persistent disk and secrets through the Render dashboard before applying.
+services:
+  - type: pserv
+    name: danms-security-mvp-private
+    runtime: node
+    plan: starter
+    buildCommand: npm ci --ignore-scripts
+    startCommand: node src/launch-local.js
+    healthCheckPath: /api/status
+    autoDeploy: false
+    envVars:
+      - key: RUNTIME_DIRECTORY
+        value: /var/data/runtime
+      - key: DASHBOARD_HOST
+        value: 0.0.0.0
+      - key: DASHBOARD_ADMIN_TOKEN
+        sync: false
+      - key: NODE_SERVICE_TOKEN
+        sync: false
+    disk:
+      name: danms-state
+      mountPath: /var/data
+      sizeGB: 1

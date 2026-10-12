@@ -1,0 +1,67 @@
+services:
+  initialize:
+    build: .
+    command: ["node", "src/initialize.js"]
+    environment:
+      RUNTIME_DIRECTORY: /app/.runtime
+    volumes: ["security-state:/app/.runtime"]
+    restart: "no"
+
+  node-a: &node
+    build: .
+    command: ["node", "src/node-service.js"]
+    depends_on: { initialize: { condition: service_completed_successfully } }
+    environment: &node-env
+      NODE_DATA_DIR: /app/.runtime/nodes/node-a
+      NODE_NAME: node-a
+      AUTHORITY_FILE: /app/.runtime/authority-trust.json
+      PORT: 7101
+      HOST: 0.0.0.0
+      NODE_SERVICE_TOKEN: ${NODE_SERVICE_TOKEN:?set NODE_SERVICE_TOKEN in .env}
+    volumes: ["security-state:/app/.runtime"]
+    networks: [security-internal]
+    restart: unless-stopped
+
+  node-b:
+    <<: *node
+    environment:
+      <<: *node-env
+      NODE_DATA_DIR: /app/.runtime/nodes/node-b
+      NODE_NAME: node-b
+      PORT: 7102
+
+  node-c:
+    <<: *node
+    environment:
+      <<: *node-env
+      NODE_DATA_DIR: /app/.runtime/nodes/node-c
+      NODE_NAME: node-c
+      PORT: 7103
+
+  dashboard:
+    build: .
+    command: ["node", "src/dashboard.js"]
+    depends_on:
+      initialize: { condition: service_completed_successfully }
+      node-a: { condition: service_started }
+      node-b: { condition: service_started }
+      node-c: { condition: service_started }
+    environment:
+      PORT: 7000
+      HOST: 0.0.0.0
+      NODE_URLS: http://node-a:7101,http://node-b:7102,http://node-c:7103
+      AUTHORITY_DIRECTORY: /app/.runtime/authorities
+      NODE_SERVICE_TOKEN: ${NODE_SERVICE_TOKEN:?set NODE_SERVICE_TOKEN in .env}
+      DASHBOARD_ADMIN_TOKEN: ${DASHBOARD_ADMIN_TOKEN:?set DASHBOARD_ADMIN_TOKEN in .env}
+    volumes: ["security-state:/app/.runtime:ro"]
+    networks:
+      - security-internal
+      - default
+    ports: ["127.0.0.1:7000:7000"]
+    restart: unless-stopped
+
+networks:
+  security-internal:
+    internal: true
+volumes:
+  security-state:

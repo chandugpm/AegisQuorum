@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+.runtime/
+node_modules/
+coverage/
+*.log
+*.pem
+*.key

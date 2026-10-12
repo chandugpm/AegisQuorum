@@ -1,0 +1,11 @@
+{
+  "name": "decentralized-network-security-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local three-node security management MVP",
+  "scripts": {
+    "start": "node src/launch-local.js",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=20" }
+}

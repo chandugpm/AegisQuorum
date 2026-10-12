@@ -1,12 +1,13 @@
 const http = require('node:http');
 const { SecurityNode, readJson } = require('./core');
+const { validToken } = require('./runtime-config');
 
 function json(response, status, body) { response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }); response.end(JSON.stringify(body)); }
 function body(request) { return new Promise((resolve, reject) => { let raw = ''; request.on('data', chunk => { raw += chunk; if (raw.length > 1_000_000) request.destroy(); }); request.on('end', () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch { reject(new Error('invalid-json')); } }); }); }
 function secureEqual(a, b) { return typeof a === 'string' && typeof b === 'string' && a.length === b.length && require('node:crypto').timingSafeEqual(Buffer.from(a), Buffer.from(b)); }
 
 function startNode({ directory, name, authorityFile, port, host = '127.0.0.1', serviceToken }) {
-  if (!serviceToken || serviceToken.length < 24) throw new Error('NODE_SERVICE_TOKEN must be at least 24 characters');
+  if (!validToken(serviceToken)) throw new Error('NODE_SERVICE_TOKEN must be a non-whitespace token of at least 32 characters');
   const trustedAuthorities = readJson(authorityFile, null);
   if (!trustedAuthorities || Object.keys(trustedAuthorities).length !== 3) throw new Error('authority trust file missing or invalid');
   const node = new SecurityNode({ directory, name, trustedAuthorities });

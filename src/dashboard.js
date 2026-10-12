@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { makePolicyUpdate, approvePolicy, readJson } = require('./core');
+const { validToken } = require('./runtime-config');
 
 function json(response, status, body) { response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }); response.end(JSON.stringify(body)); }
 function parse(request) { return new Promise((resolve, reject) => { let raw = ''; request.on('data', c => raw += c); request.on('end', () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch { reject(new Error('invalid-json')); } }); }); }
@@ -15,7 +16,7 @@ function requestJson(url, method = 'GET', payload, token) {
   });
 }
 function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDirectory, serviceToken, adminToken, staticDirectory = path.join(__dirname, '..', 'public') }) {
-  if (!adminToken || adminToken.length < 24 || !serviceToken || serviceToken.length < 24) throw new Error('dashboard and service tokens must be at least 24 characters');
+  if (!validToken(adminToken) || !validToken(serviceToken)) throw new Error('dashboard and service tokens must be non-whitespace tokens of at least 32 characters');
   const authorities = ['authority-1', 'authority-2', 'authority-3'].map(name => readJson(path.join(authorityDirectory, name, 'identity.json'), null));
   if (authorities.some(a => !a)) throw new Error('authority identities missing');
   const statuses = () => Promise.all(nodeUrls.map(async url => { try { return (await requestJson(`${url}/status`)).body; } catch (error) { return { name: url, mode: 'offline', error: error.message }; } }));

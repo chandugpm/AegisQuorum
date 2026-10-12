@@ -7,13 +7,16 @@ services:
     plan: starter
     buildCommand: npm ci --ignore-scripts
     startCommand: node src/launch-local.js
-    healthCheckPath: /api/status
     autoDeploy: false
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: RUNTIME_DIRECTORY
         value: /var/data/runtime
       - key: DASHBOARD_HOST
         value: 0.0.0.0
+      - key: PORT
+        value: "7000"
       - key: DASHBOARD_ADMIN_TOKEN
         sync: false
       - key: NODE_SERVICE_TOKEN

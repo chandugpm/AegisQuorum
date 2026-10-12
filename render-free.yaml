@@ -1,0 +1,21 @@
+# Separate, intentionally ephemeral public demo configuration. Do not replace render.yaml.
+services:
+  - type: web
+    runtime: node
+    plan: free
+    name: danms-network-security-mvp-free
+    buildCommand: npm ci --ignore-scripts
+    startCommand: node src/launch-local.js
+    healthCheckPath: /api/status
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DASHBOARD_HOST
+        value: 0.0.0.0
+      - key: RUNTIME_DIRECTORY
+        value: /tmp/danms-free-runtime
+      - key: DASHBOARD_ADMIN_TOKEN
+        sync: false
+      - key: NODE_SERVICE_TOKEN
+        sync: false

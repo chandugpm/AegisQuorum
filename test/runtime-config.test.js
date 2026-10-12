@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { announceAdminToken, initializeAuthorityTrust, resolveRuntimeTokens } = require('../src/runtime-config');
 const { readJson, writeJsonAtomic } = require('../src/core');
+const { resolveDashboardPort } = require('../src/launch-local');
 
 const adminEnvironmentToken = 'a'.repeat(32);
 const serviceEnvironmentToken = 'b'.repeat(32);
@@ -79,4 +80,11 @@ test('partial or mismatched authority state fails closed and is not overwritten'
   initializeAuthorityTrust({ authorityDirectory: partialAuthorities, trustFile: partialTrust, environment: {} });
   fs.rmSync(path.join(partialAuthorities, 'authority-3', 'identity.json'));
   assert.throws(() => initializeAuthorityTrust({ authorityDirectory: partialAuthorities, trustFile: partialTrust, environment: { NODE_ENV: 'production' } }), /incomplete/);
+});
+
+test('Render-provided dashboard port is honored and invalid ports fail before startup', () => {
+  assert.equal(resolveDashboardPort({ PORT: '18765' }), 18765);
+  assert.equal(resolveDashboardPort({}), 7000);
+  assert.throws(() => resolveDashboardPort({ PORT: '0' }), /PORT must be/);
+  assert.throws(() => resolveDashboardPort({ PORT: 'not-a-port' }), /PORT must be/);
 });

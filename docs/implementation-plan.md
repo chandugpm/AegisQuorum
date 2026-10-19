@@ -2,15 +2,16 @@
 
 ## Implemented controls
 
-- Per-node independently validated configurable quorum policy enforcement, defaulting to 2-of-3 Ed25519 approvals.
+- Independently signed configurable quorum policy enforcement, defaulting to 2-of-3 Ed25519 approvals; the dashboard validates public-key signatures and does not create approvals.
+- Unsigned proposal generation, an authority approval CLI, and rejection of stale signed proposals without resequencing.
 - Durable monotonic policy sequence validation.
 - Quarantine enforcement that rejects sensitive policy changes.
-- Request IDs, bounded timestamps, and replay-cache rejection for administrative requests when security headers are supplied.
+- Required request IDs, bounded timestamps, and replay-cache rejection for every dashboard and node mutation; the browser and dashboard-to-node workflow propagate fresh identifiers.
 - Server-side administrator/operator role checks using separate credentials; client-supplied role headers are ignored.
 - Node and dashboard operational counters at `/metrics`.
 - Normalized URL routing so query strings do not bypass endpoint handling.
 - Graceful local shutdown forwarding signals to child node processes.
-- Independent audit verification command: `npm run verify-audit -- <node-data-directory>`.
+- Independent audit verification for node directories and signed sanitized exports: `npm run verify-audit -- <node-data-directory|export.json>`.
 - Container non-root execution, dropped capabilities, `no-new-privileges`, read-only service filesystems, health checks, and private node networking.
 - Regression tests for replay protection, role primitives, quarantine enforcement, and metrics.
 

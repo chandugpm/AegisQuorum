@@ -13,6 +13,57 @@ const decoded = (value) => Buffer.from(value, 'base64');
 const now = () => new Date().toISOString();
 const SNAPSHOT_VERSION = 2;
 const snapshotIdIsSafe = (id) => typeof id === 'string' && /^[A-Za-z0-9-]{1,128}$/.test(id);
+const auditEvidenceCanonical = (record) => stable({
+  index: record.index,
+  at: record.at,
+  type: record.type,
+  outcome: record.outcome,
+  evidence: record.evidence,
+  previousHash: record.previousHash
+});
+function sanitizeAuditValue(value) {
+  if (Array.isArray(value)) return value.map(sanitizeAuditValue);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !/^(?:source|path|filename|directory|.*(?:token|secret|private.?key).*)$/i.test(key))
+    .map(([key, nested]) => [key, sanitizeAuditValue(nested)]));
+}
+function hasSensitiveAuditField(value) {
+  if (Array.isArray(value)) return value.some(hasSensitiveAuditField);
+  if (!value || typeof value !== 'object') return false;
+  return Object.entries(value).some(([key, nested]) =>
+    /^(?:source|path|filename|directory|.*(?:token|secret|private.?key).*)$/i.test(key) || hasSensitiveAuditField(nested));
+}
+
+function verifySanitizedAuditEvidence(report) {
+  const proof = report?.proof;
+  if (!report || report.verification?.valid !== true || typeof report.node !== 'string' ||
+      !proof || proof.version !== 1 || proof.node !== report.node ||
+      typeof proof.publicKey !== 'string' || !Array.isArray(proof.records) ||
+      !Array.isArray(report.events) || !Number.isSafeInteger(proof.entries) ||
+      proof.entries !== proof.records.length || proof.records.length !== report.events.length ||
+      sha256(proof.publicKey) !== report.nodePublicKeyFingerprint) {
+    return { valid: false, reason: 'evidence-metadata-invalid' };
+  }
+
+  let previousHash = 'GENESIS';
+  for (let index = 0; index < proof.records.length; index++) {
+    const record = proof.records[index];
+    const event = report.events[index];
+    if (!record || !event || record.index !== index || record.previousHash !== previousHash ||
+        record.at !== event.at || record.type !== event.type || record.outcome !== event.outcome ||
+        stable(record.evidence) !== stable(event.evidence) || !record.evidence ||
+        hasSensitiveAuditField(record.evidence) || typeof record.hash !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(record.hash) ||
+        record.hash !== sha256(auditEvidenceCanonical(record)) ||
+        !verify(proof.publicKey, record.hash, record.signature)) {
+      return { valid: false, index, reason: 'evidence-record-invalid' };
+    }
+    previousHash = record.hash;
+  }
+  if (proof.head !== previousHash) return { valid: false, index: proof.records.length, reason: 'evidence-witness-mismatch' };
+  return { valid: true, entries: proof.records.length, head: previousHash };
+}
 
 function ensureDirectory(directory) { fs.mkdirSync(directory, { recursive: true }); }
 function writeJsonAtomic(filename, value) {
@@ -44,6 +95,21 @@ function makePolicyUpdate(sequence, payload, issuedAt = now()) { return { kind: 
 function approvePolicy(update, authority) {
   const digest = policyDigest(update);
   return { authority: authority.name, digest, signature: sign(authority.privateKey, digest) };
+}
+function validatePolicyApprovals(update, approvals, trustedAuthorities, quorum, lastSequence = 0) {
+  if (!update || update.kind !== 'policy-update' || !Number.isSafeInteger(update.sequence) || update.sequence <= lastSequence) throw new Error('policy-replay-or-invalid-sequence');
+  const digest = policyDigest(update);
+  if (!Array.isArray(approvals)) throw new Error(quorum === 2 ? 'policy-needs-two-valid-distinct-approvals' : `policy-needs-${quorum}-valid-distinct-approvals`);
+  const seen = new Set();
+  for (const approval of approvals) {
+    if (!approval || typeof approval.authority !== 'string') throw new Error('policy-invalid-approval');
+    if (seen.has(approval.authority)) throw new Error('policy-duplicate-approval');
+    seen.add(approval.authority);
+    const key = trustedAuthorities[approval.authority];
+    if (!key || approval.digest !== digest || !verify(key, digest, approval.signature)) throw new Error('policy-invalid-approval');
+  }
+  if (seen.size < quorum) throw new Error(quorum === 2 ? 'policy-needs-two-valid-distinct-approvals' : `policy-needs-${quorum}-valid-distinct-approvals`);
+  return digest;
 }
 function createAuthorities(directory) {
   ensureDirectory(directory);
@@ -131,14 +197,7 @@ class SecurityNode {
     } catch { return { valid: false, reason: 'snapshot-malformed' }; }
   }
   validatePolicy(update, approvals) {
-    if (!update || update.kind !== 'policy-update' || !Number.isSafeInteger(update.sequence) || update.sequence <= this.state.lastPolicySequence) throw new Error('policy-replay-or-invalid-sequence');
-    const digest = policyDigest(update); const seen = new Set(); let valid = 0;
-    for (const approval of approvals || []) {
-      const key = this.trustedAuthorities[approval.authority];
-      if (key && !seen.has(approval.authority) && approval.digest === digest && verify(key, digest, approval.signature)) { seen.add(approval.authority); valid++; }
-    }
-    if (valid < this.quorum) throw new Error(this.quorum === 2 ? 'policy-needs-two-valid-distinct-approvals' : `policy-needs-${this.quorum}-valid-distinct-approvals`);
-    return digest;
+    return validatePolicyApprovals(update, approvals, this.trustedAuthorities, this.quorum, this.state.lastPolicySequence);
   }
   applyPolicy(update, approvals) {
     if (this.state.quarantined || this.state.mode !== 'trusted') throw new Error('node-not-eligible-while-quarantined');
@@ -160,6 +219,7 @@ class SecurityNode {
   }
   enterSafeMode(reason) { this.state.mode = 'safe-mode'; this.state.quarantined = true; this.saveState(); this.appendAudit('safe-mode-entered', { reason }); return { clean: false, safeMode: true, reason }; }
   rollback(id = this.state.trustedSnapshot) {
+    this.appendAudit('recovery-attempted', { snapshotId: typeof id === 'string' ? id : 'invalid' });
     if (id !== this.state.trustedSnapshot) return this.enterSafeMode('rollback-snapshot-not-current');
     const result = this.verifySnapshot(id);
     if (!result.valid) return this.enterSafeMode(`rollback-${result.reason}`);
@@ -172,6 +232,8 @@ class SecurityNode {
       if (sha256(fs.readFileSync(temporary)) !== result.snapshot.digest) { fs.rmSync(temporary, { force: true }); return this.enterSafeMode('rollback-write-verification-failed'); }
       fs.renameSync(temporary, this.paths.protected);
       if (this.digestProtected() !== result.snapshot.digest) return this.enterSafeMode('rollback-post-write-verification-failed');
+      const postRecoverySnapshot = this.verifySnapshot(id);
+      if (!postRecoverySnapshot.valid || this.digestProtected() !== postRecoverySnapshot.snapshot.digest) return this.enterSafeMode('rollback-post-recovery-check-failed');
       this.state.mode = 'trusted'; this.state.quarantined = false; this.saveState(); this.appendAudit('rollback-verified', { id, before, restored: result.snapshot.digest });
       return { restored: true, digest: result.snapshot.digest, id };
     } catch (error) {
@@ -182,17 +244,28 @@ class SecurityNode {
   simulateTamper() { fs.appendFileSync(this.paths.protected, `\n/* simulated tamper ${this.clock()} */\n`); this.appendAudit('tamper-simulated', {}); return { tampered: true }; }
   auditReport() {
     const outcome = { 'tamper-detected': 'detected', 'quarantine-applied': 'applied', 'rollback-verified': 'success', 'integrity-ok': 'success', 'safe-mode-entered': 'failed', 'policy-accepted': 'accepted' };
+    const verification = this.verifyAudit();
+    const events = this.audit.map(record => {
+      const evidence = sanitizeAuditValue(record.details);
+      return { index: record.index, at: record.at, type: record.type, outcome: outcome[record.type] || 'recorded', evidence };
+    });
+    let previousHash = 'GENESIS';
+    const records = events.map(event => {
+      const draft = { index: event.index, at: event.at, type: event.type, outcome: event.outcome, evidence: event.evidence, previousHash };
+      const hash = sha256(auditEvidenceCanonical(draft));
+      const record = { ...draft, hash, signature: sign(this.identity.privateKey, hash) };
+      previousHash = hash;
+      return record;
+    });
     return {
       node: this.name,
-      verification: this.verifyAudit(),
-      events: this.audit.map(record => {
-        const evidence = { ...record.details };
-        delete evidence.source;
-        return { index: record.index, at: record.at, type: record.type, outcome: outcome[record.type] || 'recorded', evidence };
-      })
+      nodePublicKeyFingerprint: sha256(this.identity.publicKey),
+      verification,
+      events,
+      proof: verification.valid ? { version: 1, node: this.name, publicKey: this.identity.publicKey, entries: records.length, head: previousHash, records } : null
     };
   }
   status() { return { name: this.name, nodePublicKeyFingerprint: sha256(this.identity.publicKey).slice(0, 16), mode: this.state.mode, quarantined: this.state.quarantined, lastPolicySequence: this.state.lastPolicySequence, trustedSnapshot: this.state.trustedSnapshot, currentDigest: this.digestProtected(), audit: this.verifyAudit() }; }
 }
 
-module.exports = { SecurityNode, sha256, stable, createAuthorities, authorityTrust, makePolicyUpdate, approvePolicy, policyDigest, verify, readJson, writeJsonAtomic, SNAPSHOT_VERSION };
+module.exports = { SecurityNode, sha256, stable, createAuthorities, authorityTrust, makePolicyUpdate, approvePolicy, validatePolicyApprovals, policyDigest, verify, verifySanitizedAuditEvidence, readJson, writeJsonAtomic, SNAPSHOT_VERSION };

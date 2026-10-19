@@ -73,7 +73,7 @@ function initializeAuthorityTrust({ authorityDirectory, trustFile, environment =
 }
 
 function announceAdminToken({ environment = process.env, adminToken, logger = console }) {
-  if (!isProduction(environment)) logger.log(`Local development dashboard administrator token: ${adminToken}`);
+  if (!isProduction(environment) && adminToken) logger.log('Local development dashboard administrator token is configured; value withheld.');
 }
 
 module.exports = { MINIMUM_TOKEN_LENGTH, validToken, resolveRuntimeTokens, initializeAuthorityTrust, announceAdminToken, isProduction };

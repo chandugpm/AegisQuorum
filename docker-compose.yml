@@ -65,10 +65,10 @@ services:
       PORT: 7000
       HOST: 0.0.0.0
       NODE_URLS: http://node-a:7101,http://node-b:7102,http://node-c:7103
-      AUTHORITY_DIRECTORY: /app/.runtime/authorities
+      AUTHORITY_TRUST_FILE: /app/.runtime/authority-trust.json
       NODE_SERVICE_TOKEN: ${NODE_SERVICE_TOKEN:?set NODE_SERVICE_TOKEN in .env}
       DASHBOARD_ADMIN_TOKEN: ${DASHBOARD_ADMIN_TOKEN:?set DASHBOARD_ADMIN_TOKEN in .env}
-      DASHBOARD_OPERATOR_TOKEN: ${DASHBOARD_OPERATOR_TOKEN:-}
+      DASHBOARD_OPERATOR_TOKEN: ${DASHBOARD_OPERATOR_TOKEN:?set DASHBOARD_OPERATOR_TOKEN in .env}
       POLICY_QUORUM: ${POLICY_QUORUM:-2}
     volumes: ["security-state:/app/.runtime:ro"]
     networks:

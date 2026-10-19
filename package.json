@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/launch-local.js",
     "test": "node --test",
-    "verify-audit": "node src/verify-audit.js"
+    "verify-audit": "node src/verify-audit.js",
+    "approve-policy": "node src/approve-policy.js"
   },
   "engines": { "node": ">=20" }
 }

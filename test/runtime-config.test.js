@@ -56,6 +56,14 @@ test('production startup announcement never logs the administrator token', () =>
   assert.deepEqual(messages, []);
 });
 
+test('development startup announcement confirms configuration without logging the administrator token', () => {
+  const messages = [];
+  announceAdminToken({ environment: {}, adminToken: adminEnvironmentToken, logger: { log: message => messages.push(message) } });
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].includes(adminEnvironmentToken), false);
+  assert.match(messages[0], /value withheld/);
+});
+
 test('existing authority identities and matching trust are validated without overwriting trust material', t => {
   const root = temporaryRoot(t); const authorityDirectory = path.join(root, 'authorities'); const trustFile = path.join(root, 'authority-trust.json');
   const first = initializeAuthorityTrust({ authorityDirectory, trustFile, environment: { NODE_ENV: 'production' } });

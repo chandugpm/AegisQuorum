@@ -99,6 +99,8 @@ test('C: missing snapshot and real filesystem recovery failure cannot report suc
   const missingRecovery = missing.node.rollback('does-not-exist');
   assert.equal(missingRecovery.restored, undefined);
   assert.equal(missingRecovery.safeMode, true);
+  assert.ok(missing.node.audit.some(record => record.type === 'recovery-attempted'));
+  assert.equal(missing.node.state.mode, 'safe-mode');
   assert.deepEqual(fs.readFileSync(missing.node.paths.protected), beforeMissing);
 
   const failed = fixture(t);
@@ -107,6 +109,8 @@ test('C: missing snapshot and real filesystem recovery failure cannot report suc
   const failedRecovery = failed.node.rollback(failed.snapshotId);
   assert.equal(failedRecovery.restored, undefined);
   assert.equal(failedRecovery.safeMode, true);
+  assert.ok(failed.node.audit.some(record => record.type === 'recovery-attempted'));
+  assert.equal(failed.node.state.mode, 'safe-mode');
   assert.match(failedRecovery.reason, /^rollback-io-failure-/);
   assert.equal(fs.statSync(failed.node.paths.protected).isDirectory(), true, 'real recovery failure did not overwrite target');
 });
@@ -118,7 +122,7 @@ test('D: detection, quarantine, recovery, and post-recovery audit events chain c
   f.node.rollback(f.snapshotId);
   f.node.scanIntegrity();
   const types = f.node.audit.map(record => record.type);
-  for (const required of ['tamper-detected', 'quarantine-applied', 'rollback-verified', 'integrity-ok']) assert.ok(types.includes(required), `expected ${required} audit event`);
+  for (const required of ['tamper-detected', 'quarantine-applied', 'recovery-attempted', 'rollback-verified', 'integrity-ok']) assert.ok(types.includes(required), `expected ${required} audit event`);
   assert.equal(f.node.verifyAudit().valid, true);
 
   const copiedAudit = JSON.parse(JSON.stringify(readJson(f.node.paths.audit)));

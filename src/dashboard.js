@@ -4,7 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { makePolicyUpdate, approvePolicy, readJson } = require('./core');
 const { validToken } = require('./runtime-config');
-const { RequestError, readJsonBody, createRateLimiter, clientKey } = require('./http-utils');
+const { RequestError, ReplayCache, requestSecurity, createMetrics, readJsonBody, createRateLimiter, clientKey } = require('./http-utils');
 
 function json(response, status, body, headers = {}) { response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', ...headers }); response.end(JSON.stringify(body)); }
 function equal(a, b) { return typeof a === 'string' && typeof b === 'string' && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)); }
@@ -26,22 +26,30 @@ function summarizeWorkflow(stage, result, index) {
   return { node: `node-${String.fromCharCode(97 + index)}`, ok, outcome: ok ? 'completed' : 'failed' };
 }
 
-function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDirectory, serviceToken, adminToken, staticDirectory = path.join(__dirname, '..', 'public'), logger = console, rateLimiter = createRateLimiter() }) {
-  if (!validToken(adminToken) || !validToken(serviceToken)) throw new Error('dashboard and service tokens must be non-whitespace tokens of at least 32 characters');
+function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDirectory, serviceToken, adminToken, operatorToken = process.env.DASHBOARD_OPERATOR_TOKEN, staticDirectory = path.join(__dirname, '..', 'public'), logger = console, rateLimiter = createRateLimiter(), replayCache = new ReplayCache(), metrics = createMetrics() }) {
+  if (!validToken(adminToken) || !validToken(serviceToken) || (operatorToken !== undefined && !validToken(operatorToken))) throw new Error('dashboard, operator, and service tokens must be non-whitespace tokens of at least 32 characters');
   const authorities = ['authority-1', 'authority-2', 'authority-3'].map(name => readJson(path.join(authorityDirectory, name, 'identity.json'), null));
   if (authorities.some(a => !a)) throw new Error('authority identities missing');
   const statuses = () => Promise.all(nodeUrls.map(async (url, index) => { try { return sanitizeNodeStatus((await requestJson(`${url}/status`)).body, `node-${String.fromCharCode(97 + index)}`); } catch { return { name: `node-${String.fromCharCode(97 + index)}`, mode: 'offline', error: 'unavailable' }; } }));
   const auditReports = () => Promise.all(nodeUrls.map(async (url, index) => { try { const result = await requestJson(`${url}/audit`); return result.status === 200 ? result.body : { node: `node-${String.fromCharCode(97 + index)}`, verification: { valid: false }, events: [] }; } catch { return { node: `node-${String.fromCharCode(97 + index)}`, verification: { valid: false }, events: [] }; } }));
   const commandAll = (endpoint, payload) => Promise.all(nodeUrls.map(url => requestJson(`${url}${endpoint}`, 'POST', payload, serviceToken).catch(() => ({ status: 503, body: {} }))));
   const server = http.createServer(async (request, response) => {
+    metrics.increment('http_requests_total');
     const url = new URL(request.url, 'http://dashboard.local'); const route = url.pathname;
     try {
       if (!rateLimiter.allow(clientKey(request))) return json(response, 429, { error: 'rate-limited' });
       if (request.method === 'GET' && route === '/') { response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return response.end(fs.readFileSync(path.join(staticDirectory, 'index.html'))); }
       if (request.method === 'GET' && route === '/api/status') return json(response, 200, { nodes: await statuses() });
       if (request.method === 'GET' && route === '/api/audit') return json(response, 200, { nodes: await auditReports() }, url.searchParams.get('download') === '1' ? { 'content-disposition': 'attachment; filename="danms-audit-evidence.json"' } : {});
+      if (request.method === 'GET' && route === '/metrics') return json(response, 200, metrics.snapshot());
       if (request.method !== 'POST') return json(response, 404, { error: 'not-found' });
-      if (!equal(request.headers['x-dashboard-admin-token'], adminToken)) return json(response, 401, { error: 'administrator-token-required' });
+      const suppliedAdmin = request.headers['x-dashboard-admin-token'];
+      const suppliedOperator = request.headers['x-dashboard-operator-token'];
+      const isAdmin = equal(suppliedAdmin, adminToken);
+      const isOperator = operatorToken !== undefined && equal(suppliedOperator, operatorToken);
+      if (!isAdmin && !isOperator) { metrics.increment('auth_failures_total'); return json(response, 401, { error: 'administrator-or-operator-token-required' }); }
+      if (isOperator && route === '/api/demo') { metrics.increment('authorization_denials_total'); return json(response, 403, { error: 'admin-role-required' }); }
+      const security = requestSecurity(request, replayCache);
       const input = await readJsonBody(request);
       if (route === '/api/policy') {
         if (!input.payload || typeof input.payload !== 'object' || Array.isArray(input.payload)) return json(response, 400, { error: 'invalid-policy-request' });
@@ -49,6 +57,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         const update = makePolicyUpdate(sequence, input.payload);
         const approvals = [approvePolicy(update, authorities[0]), approvePolicy(update, authorities[1])];
         const results = await commandAll('/policy', { update, approvals }); const summary = results.map(summarizeCommand);
+        if (security.checked) metrics.increment('replay_protected_operations_total');
         return json(response, summary.every(result => result.ok) ? 200 : 503, { update: { sequence: update.sequence }, approvals: approvals.map(approval => approval.authority), results: summary });
       }
       if (route === '/api/demo') {
@@ -60,12 +69,13 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
       }
       return json(response, 404, { error: 'not-found' });
     } catch (error) {
-      if (error instanceof RequestError) return json(response, error.code === 'request-too-large' ? 413 : 400, { error: error.code });
+      metrics.increment('operation_failures_total');
+      if (error instanceof RequestError) return json(response, error.code === 'request-too-large' ? 413 : error.code === 'stale-request' || error.code === 'replayed-request' ? 409 : 400, { error: error.code });
       logger.warn?.('dashboard-request-failed', { route });
       return json(response, 500, { error: 'request-failed' });
     }
   });
   server.listen(port, host, () => console.log(`Dashboard listening at http://${host}:${server.address().port}`)); return server;
 }
-if (require.main === module) startDashboard({ port: Number(process.env.PORT || 7000), host: process.env.HOST || '127.0.0.1', nodeUrls: (process.env.NODE_URLS || '').split(',').filter(Boolean), authorityDirectory: process.env.AUTHORITY_DIRECTORY, serviceToken: process.env.NODE_SERVICE_TOKEN, adminToken: process.env.DASHBOARD_ADMIN_TOKEN });
+if (require.main === module) startDashboard({ port: Number(process.env.PORT || 7000), host: process.env.HOST || '127.0.0.1', nodeUrls: (process.env.NODE_URLS || '').split(',').filter(Boolean), authorityDirectory: process.env.AUTHORITY_DIRECTORY, serviceToken: process.env.NODE_SERVICE_TOKEN, adminToken: process.env.DASHBOARD_ADMIN_TOKEN, operatorToken: process.env.DASHBOARD_OPERATOR_TOKEN });
 module.exports = { startDashboard, requestJson, sanitizeNodeStatus };

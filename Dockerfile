@@ -1,6 +1,8 @@
-FROM node:24-alpine
+FROM node:24-alpine AS runtime
 WORKDIR /app
-COPY package.json ./
+ENV NODE_ENV=production
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY src ./src
 COPY public ./public
 RUN mkdir /app/.runtime && chown -R node:node /app

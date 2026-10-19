@@ -5,7 +5,8 @@
   "description": "Local three-node security management MVP",
   "scripts": {
     "start": "node src/launch-local.js",
-    "test": "node --test"
+    "test": "node --test",
+    "verify-audit": "node src/verify-audit.js"
   },
   "engines": { "node": ">=20" }
 }

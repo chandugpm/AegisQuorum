@@ -52,10 +52,12 @@ function createAuthorities(directory) {
 function authorityTrust(authorities) { return Object.fromEntries(authorities.map(a => [a.name, a.publicKey])); }
 
 class SecurityNode {
-  constructor({ directory, name, trustedAuthorities, clock = now }) {
+  constructor({ directory, name, trustedAuthorities, quorum = 2, clock = now }) {
+    if (!Number.isSafeInteger(quorum) || quorum < 2 || quorum > Object.keys(trustedAuthorities || {}).length) throw new Error('policy quorum is invalid');
     this.directory = directory;
     this.name = name;
     this.trustedAuthorities = trustedAuthorities;
+    this.quorum = quorum;
     this.clock = clock;
     this.paths = {
       protected: path.join(directory, 'protected', 'config.json'),
@@ -135,10 +137,11 @@ class SecurityNode {
       const key = this.trustedAuthorities[approval.authority];
       if (key && !seen.has(approval.authority) && approval.digest === digest && verify(key, digest, approval.signature)) { seen.add(approval.authority); valid++; }
     }
-    if (valid < 2) throw new Error('policy-needs-two-valid-distinct-approvals');
+    if (valid < this.quorum) throw new Error(this.quorum === 2 ? 'policy-needs-two-valid-distinct-approvals' : `policy-needs-${this.quorum}-valid-distinct-approvals`);
     return digest;
   }
   applyPolicy(update, approvals) {
+    if (this.state.quarantined || this.state.mode !== 'trusted') throw new Error('node-not-eligible-while-quarantined');
     const digest = this.validatePolicy(update, approvals);
     this.state.lastPolicySequence = update.sequence; this.state.policy = update; this.saveState();
     this.appendAudit('policy-accepted', { sequence: update.sequence, digest, approvers: approvals.map(a => a.authority) });

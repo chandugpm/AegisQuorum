@@ -2,6 +2,30 @@ class RequestError extends Error {
   constructor(code) { super(code); this.code = code; }
 }
 
+class ReplayCache {
+  constructor({ ttlMs = 300000, maxEntries = 10000 } = {}) { this.ttlMs = ttlMs; this.maxEntries = maxEntries; this.entries = new Map(); }
+  accept(id, timestamp = Date.now()) {
+    if (typeof id !== 'string' || !/^[A-Za-z0-9._:-]{8,128}$/.test(id)) return false;
+    for (const [key, expires] of this.entries) if (expires <= timestamp) this.entries.delete(key);
+    if (this.entries.has(id) || this.entries.size >= this.maxEntries) return false;
+    this.entries.set(id, timestamp + this.ttlMs); return true;
+  }
+}
+
+function requestSecurity(request, replayCache) {
+  const id = request.headers['x-request-id']; const rawTimestamp = request.headers['x-request-timestamp'];
+  if (id === undefined && rawTimestamp === undefined) return { checked: false };
+  const timestamp = Number(rawTimestamp);
+  if (!Number.isSafeInteger(timestamp) || Math.abs(Date.now() - timestamp) > 300000) throw new RequestError('stale-request');
+  if (!replayCache?.accept(id, timestamp)) throw new RequestError('replayed-request');
+  return { checked: true, id, timestamp };
+}
+
+function createMetrics() {
+  const values = new Map();
+  return { increment(name, amount = 1) { values.set(name, (values.get(name) || 0) + amount); }, snapshot() { return Object.fromEntries(values); } };
+}
+
 function readJsonBody(request, maxBytes = 8192) {
   const declaredLength = Number(request.headers['content-length'] || 0);
   if (declaredLength > maxBytes) return Promise.reject(new RequestError('request-too-large'));
@@ -38,4 +62,4 @@ function createRateLimiter({ windowMs = 60000, perClientLimit = 20, globalLimit 
 
 function clientKey(request) { return request.socket.remoteAddress || 'unknown-client'; }
 
-module.exports = { RequestError, readJsonBody, createRateLimiter, clientKey };
+module.exports = { RequestError, ReplayCache, requestSecurity, createMetrics, readJsonBody, createRateLimiter, clientKey };

@@ -19,3 +19,10 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm test
+      - run: node --check src/core.js
+      - run: node --check src/dashboard.js
+      - run: node --check src/node-service.js
+      - run: node --check src/verify-audit.js
+      - run: npm run verify-audit -- --help || true
+      - name: Build container
+        run: docker build --tag danms-security-mvp:ci .

@@ -3,35 +3,41 @@
 ## Components
 
 ```text
-Browser (local administrator + token)
-        |
-Dashboard :7000 (127.0.0.1 only)
-        | signed control requests + service token, private network
+Browser
+  |
+Dashboard :7000
+  | authenticated admin operations + service token
+Private Compose network
   +-----+-----+-----+
   |           |     |
-Node A :7101 Node B :7102 Node C :7103
+Node A      Node B Node C
   |           |     |
-data/node-a  data/node-b  data/node-c
-identity, policy, protected config, signed snapshots, audit chain, quarantine
+Independent identity, protected file, snapshot, policy state, audit chain
 ```
 
-Every `node-service.js` process instantiates exactly one `SecurityNode`, loaded from a distinct directory. Nodes do not share private keys, policy replay state, snapshot files, or audit chains. The dashboard only submits the same signed payload to all three; each node independently verifies the policy signatures and sequence.
+Each node independently validates policy approvals, sequence numbers, trusted snapshots, and its own audit chain. The dashboard coordinates requests and reports live status; it is not the sole policy enforcement point.
 
-## Policy protocol
+## Policy and request protocol
 
-1. The dashboard canonicalizes `{kind, sequence, issuedAt, payload}` using deterministic JSON.
-2. Two of `authority-1..3` sign its SHA-256 digest with separate Ed25519 private keys.
-3. A node rejects a request unless the digest matches, both approvers are distinct trusted names, both signatures verify, and `sequence` is greater than its stored `lastPolicySequence`.
-4. The accepted update and sequence are atomically persisted before an audit entry is appended.
+1. The dashboard creates a canonical policy update with a monotonic sequence.
+2. The configured quorum, defaulting to 2 of 3, distinct authority keys sign its digest.
+3. Each node validates the configured number of signatures independently and rejects stale or replayed sequences.
+4. Quarantined or safe-mode nodes cannot apply sensitive policies.
+5. Administrative HTTP requests may include `x-request-id` and `x-request-timestamp`; stale and duplicate requests are rejected by a bounded replay cache.
+6. Dashboard mutations require a server-validated admin or separate operator token. Demonstration tampering requires the admin credential; client-supplied role headers are not trusted.
 
-The three authority keys are only a local-development trust model. Nodes are provisioned with authority *public* keys. The coordinator's authority private keys are never sent to nodes and must never be committed.
+## Integrity and recovery
 
-## Integrity and recovery state machine
+Trusted snapshots bind node name and identity fingerprint to signed content metadata. Integrity scans compare the protected file digest with the current trusted snapshot. Confirmed changes produce sanitized evidence, quarantine the node at the application layer, and emit audit events. Rollback verifies the snapshot before replacement and verifies the restored digest afterward.
 
-`trusted -> tampered -> quarantined -> recovered`
+## Audit and observability
 
-An integrity scan hashes `protected/config.json`. On mismatch it writes a forensic copy in `quarantine/`, marks the node quarantined, and emits audit events. Rollback verifies both the snapshot content hash and its Ed25519 signature before replacing the target. Invalid/missing recovery evidence puts the node in `safe-mode`; it never silently writes an unverified snapshot.
+Audit entries contain timestamps, event types, details, previous hashes, record hashes, and node signatures. The state file stores an audit witness that detects deletion. `GET /metrics` exposes numeric operational counters without payloads or credentials. `npm run verify-audit -- <node-data-directory>` verifies a persisted node audit chain independently of the running service.
 
-## Persistence and access boundaries
+## Deployment boundaries
 
-All state writes use write-to-temporary-file then rename. Node endpoints bind to loopback by default. In Compose, nodes are not published to the host; the dashboard alone is published to the host loopback. State-changing node requests require a shared, non-default service token. State-changing dashboard requests require a separate admin token. Tokens are environment-provided in containers and locally generated under ignored `.runtime/secrets` for development.
+Nodes bind only to the private Compose network and are not published to the host. The dashboard is published to loopback by default. Services run as the non-root Node user, drop Linux capabilities, set `no-new-privileges`, use read-only filesystems, and receive health checks. Runtime keys and tokens live in the ignored persistent volume or deployment secret manager; private keys must never be committed.
+
+## Known limitations
+
+The current transport uses a shared service token rather than mTLS. Quarantine is not host or firewall isolation. There is no external immutable audit sink, HSM, certificate lifecycle, Prometheus exposition endpoint, or automatic alert delivery.

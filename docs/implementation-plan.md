@@ -1,32 +1,27 @@
-# Implementation plan and status
+# Advanced implementation status
 
-1. **Repository assessment and design** — complete: this document, architecture, threat model, and file layout.
-2. **Independent nodes** — complete: `src/node-service.js` starts one node per process with a separate data directory.
-3. **Trust protocol** — complete: Ed25519 identities, canonical signed updates, 2-of-3 approval verification, persisted sequence replay guard.
-4. **Integrity and recovery** — complete: SHA-256, signed snapshots, simulated quarantine, verified rollback, safe mode, signed hash-chain audit.
-5. **Dashboard** — complete: live polling and a real end-to-end demonstration action.
-6. **Tests** — complete: unit/negative/failure-injection tests and a three-node HTTP integration test.
-7. **Verification** — run `npm test` after implementation; results are reported only after execution.
-8. **Security review** — documented in `docs/security-review.md`.
-9. **Docker Compose** — complete: private network and localhost dashboard publishing.
-10. **GitHub and Render config** — complete as safe configuration scaffolds.
-11–12. **Deployment/remote verification** — intentionally not attempted until a Git repository, credentials, and non-ephemeral deployment environment are supplied.
+## Implemented controls
 
-## File layout
+- Per-node independently validated configurable quorum policy enforcement, defaulting to 2-of-3 Ed25519 approvals.
+- Durable monotonic policy sequence validation.
+- Quarantine enforcement that rejects sensitive policy changes.
+- Request IDs, bounded timestamps, and replay-cache rejection for administrative requests when security headers are supplied.
+- Server-side administrator/operator role checks using separate credentials; client-supplied role headers are ignored.
+- Node and dashboard operational counters at `/metrics`.
+- Normalized URL routing so query strings do not bypass endpoint handling.
+- Graceful local shutdown forwarding signals to child node processes.
+- Independent audit verification command: `npm run verify-audit -- <node-data-directory>`.
+- Container non-root execution, dropped capabilities, `no-new-privileges`, read-only service filesystems, health checks, and private node networking.
+- Regression tests for replay protection, role primitives, quarantine enforcement, and metrics.
 
-```text
-src/core.js              security primitives and durable node state
-src/node-service.js      one independent node HTTP process
-src/dashboard.js         loopback dashboard coordinator
-src/launch-local.js      local three-node launcher
-public/index.html        dashboard interface
-test/*.test.js           unit and integration/negative/failure tests
-docker-compose.yml       four-service local stack
-render.yaml              intentionally non-auto-deploy private-preview blueprint
-```
+## Deliberately incomplete controls
 
-## Capability verification isolation
+- Mutual TLS and certificate rotation are not implemented. Current node authentication uses a shared service token over the Compose private network.
+- Quarantine is application-level only. It changes node authorization state; it does not claim to enforce host, firewall, or orchestrator network isolation.
+- Credential rotation and revocation APIs are not implemented. Rotation requires controlled environment update and coordinated restart.
+- No external immutable audit sink, SIEM, HSM, or anti-rollback hardware is present.
+- Metrics are JSON counters rather than a Prometheus exposition endpoint.
+- Alerting is not automated; rule counters and audit events are available for integration.
+- The dashboard has no complete pagination or filtering UI for historical audit records.
 
-`test/core-capabilities.test.js` creates a new `fs.mkdtempSync(path.join(os.tmpdir(), 'danms-capability-'))` directory for every test, creates throwaway Ed25519 authorities in that directory, and uses a synthetic protected configuration. Every temporary tree is registered for deletion with the Node test runner. It never opens `.runtime/`, uses real node identities, binds a network listener, or changes host configuration.
-
-The focused tests cover SHA-256 mismatch detection, valid/modified/invalid/corrupted/missing snapshots, verified restore content and post-recovery scan, an actual filesystem restore failure, and signed audit-chain tampering. Run them with `node --test test/core-capabilities.test.js`; run the complete suite with `npm test`.
+These boundaries are intentional. They prevent the project from claiming controls that are not present in the implementation.

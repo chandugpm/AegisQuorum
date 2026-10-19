@@ -12,6 +12,7 @@ const { createRateLimiter } = require('../src/http-utils');
 
 const adminToken = 'a'.repeat(32);
 const serviceToken = 'b'.repeat(32);
+const operatorToken = 'o'.repeat(32);
 
 function requestJson(url, { method = 'GET', headers = {}, body } = {}) {
   return new Promise((resolve, reject) => {
@@ -28,7 +29,7 @@ async function fixture(t, { nodeUrls, rateLimiter } = {}) {
   const nodes = nodeUrls ? [] : ['node-a', 'node-b', 'node-c'].map(name => startNode({ directory: path.join(root, name), name, authorityFile: trust, port: 0, serviceToken }));
   await Promise.all(nodes.map(node => waitFor(node.server))); t.after(async () => { await Promise.all(nodes.map(node => close(node.server))); });
   const urls = nodeUrls || nodes.map(node => `http://127.0.0.1:${node.server.address().port}`);
-  const dashboard = startDashboard({ port: 0, authorityDirectory: path.join(root, 'authorities'), nodeUrls: urls, serviceToken, adminToken, rateLimiter: rateLimiter || createRateLimiter({ perClientLimit: 100, globalLimit: 100 }) });
+  const dashboard = startDashboard({ port: 0, authorityDirectory: path.join(root, 'authorities'), nodeUrls: urls, serviceToken, adminToken, operatorToken, rateLimiter: rateLimiter || createRateLimiter({ perClientLimit: 100, globalLimit: 100 }) });
   await waitFor(dashboard); t.after(() => close(dashboard));
   return { root, nodes, base: `http://127.0.0.1:${dashboard.address().port}` };
 }
@@ -41,7 +42,9 @@ test('dashboard reports sanitized live state and executes the authenticated real
 
   const deniedPolicy = await requestJson(`${f.base}/api/policy`, { method: 'POST', body: { payload: { enforcement: 'observe-only' } } });
   const deniedDemo = await requestJson(`${f.base}/api/demo`, { method: 'POST', body: {} });
-  assert.equal(deniedPolicy.status, 401); assert.equal(deniedDemo.status, 401);
+  const forgedRole = await requestJson(`${f.base}/api/demo`, { method: 'POST', headers: { 'x-dashboard-admin-token': 'wrong', 'x-dashboard-role': 'admin' }, body: {} });
+  const operatorDemo = await requestJson(`${f.base}/api/demo`, { method: 'POST', headers: { 'x-dashboard-operator-token': operatorToken }, body: {} });
+  assert.equal(deniedPolicy.status, 401); assert.equal(deniedDemo.status, 401); assert.equal(forgedRole.status, 401); assert.equal(operatorDemo.status, 403);
 
   const workflow = await requestJson(`${f.base}/api/demo`, { method: 'POST', headers: { 'x-dashboard-admin-token': adminToken }, body: {} });
   assert.equal(workflow.status, 200); assert.deepEqual(Object.keys(workflow.body.workflow), ['tamper', 'snapshot', 'detection', 'recovery', 'verification']);
@@ -51,6 +54,20 @@ test('dashboard reports sanitized live state and executes the authenticated real
   assert.equal(audit.status, 200); assert.match(audit.headers['content-disposition'], /attachment/); assert.ok(audit.body.nodes.every(report => report.verification.valid));
   assert.equal(JSON.stringify(audit.body).includes('source'), false, 'filesystem source paths are removed from evidence');
   assert.equal(JSON.stringify(audit.body).includes('privateKey'), false);
+});
+
+test('policy submission rejects missing and invalid administrator tokens and accepts the configured token', async t => {
+  const f = await fixture(t);
+  const payload = { payload: { enforcement: 'observe-only', changeWindow: 'operator-requested' } };
+  const missing = await requestJson(`${f.base}/api/policy`, { method: 'POST', body: payload });
+  const invalid = await requestJson(`${f.base}/api/policy`, { method: 'POST', headers: { 'x-dashboard-admin-token': 'not-the-configured-token' }, body: payload });
+  const valid = await requestJson(`${f.base}/api/policy`, { method: 'POST', headers: { 'x-dashboard-admin-token': adminToken }, body: payload });
+
+  assert.equal(missing.status, 401);
+  assert.equal(invalid.status, 401);
+  assert.equal(valid.status, 200);
+  assert.deepEqual(valid.body.approvals, ['authority-1', 'authority-2']);
+  assert.ok(valid.body.results.every(result => result.ok));
 });
 
 test('dashboard returns safe unavailable-node results, enforces request limits, and rate limits callers', async t => {

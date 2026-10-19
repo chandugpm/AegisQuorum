@@ -27,6 +27,7 @@ To configure tokens explicitly, create a `.env` file or export:
 
 ```bash
 DASHBOARD_ADMIN_TOKEN=replace-with-a-long-random-token
+DASHBOARD_OPERATOR_TOKEN=replace-with-a-long-random-operator-token
 NODE_SERVICE_TOKEN=replace-with-a-different-long-random-token
 ```
 
@@ -111,6 +112,8 @@ The dashboard provides:
 
 Administrative actions require the dashboard administrator token entered in the browser. The token is kept in browser memory and is not persisted by the application.
 
+The value entered in the dashboard must match `DASHBOARD_ADMIN_TOKEN` configured for the running dashboard. Docker Compose reads it from `.env`; Render does not receive the local `.env` file, so set `DASHBOARD_ADMIN_TOKEN` in the environment settings for the Render service using the same secret value. Do not substitute `NODE_SERVICE_TOKEN` or a development token generated under `.runtime/secrets/`. After changing a Render secret, redeploy/restart the service. The dashboard sends the entered value in the `x-dashboard-admin-token` request header.
+
 ## HTTP endpoints
 
 ### Dashboard
@@ -125,6 +128,8 @@ Authenticated dashboard requests require:
 
 ```text
 x-dashboard-admin-token: <DASHBOARD_ADMIN_TOKEN>
+# Or use the separate operator credential for policy operations:
+x-dashboard-operator-token: <DASHBOARD_OPERATOR_TOKEN>
 ```
 
 ### Node services
@@ -144,6 +149,31 @@ Administrative node requests require:
 x-node-service-token: <NODE_SERVICE_TOKEN>
 ```
 
+## Advanced security controls
+
+The current implementation includes independently verified 2-of-3 policy approvals, durable sequence checks, application-level quarantine enforcement, request replay protection, server-side dashboard roles, numeric operational metrics, independent audit verification, and graceful local shutdown.
+
+Administrative mutations can include:
+
+```text
+x-request-id: unique-request-id
+x-request-timestamp: <Unix milliseconds>
+x-dashboard-admin-token: <DASHBOARD_ADMIN_TOKEN>
+x-dashboard-operator-token: <DASHBOARD_OPERATOR_TOKEN>
+```
+
+Requests with both replay-protection headers must use a fresh timestamp and unique request ID. Operators authenticated with the separate operator token may submit policies; only administrators authenticated with the admin token may run the destructive demonstration workflow. A client-supplied role header is never trusted.
+
+Node and dashboard metrics are available at `GET /metrics`. They contain counters only and do not include credentials or request payloads.
+
+Verify an audit chain independently:
+
+```bash
+npm run verify-audit -- .runtime/nodes/node-a
+```
+
+See [docs/architecture.md](docs/architecture.md), [docs/threat-model.md](docs/threat-model.md), and [docs/implementation-plan.md](docs/implementation-plan.md) for trust boundaries, residual risks, and incomplete controls.
+
 ## Security model
 
 - Authority approvals use Ed25519 signatures.
@@ -156,7 +186,7 @@ x-node-service-token: <NODE_SERVICE_TOKEN>
 - Dashboard audit responses remove local filesystem paths and private identity material.
 - Administrative endpoints use token authentication and request rate limiting.
 
-This project is an MVP and should not be treated as a production security control without additional operational review, key-management design, network hardening, monitoring, and failure testing.
+This project is an MVP and should not be treated as a production security control without additional operational review, key-management design, network hardening, monitoring, and failure testing. It does not claim mTLS, certificate rotation, external immutable logging, firewall-enforced quarantine, HSM-backed keys, or production multi-node consensus.
 
 ## Project layout
 

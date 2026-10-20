@@ -12,6 +12,7 @@
 - Normalized URL routing so query strings do not bypass endpoint handling.
 - Graceful local shutdown forwarding signals to child node processes.
 - Independent audit verification for node directories and signed sanitized exports: `npm run verify-audit -- <node-data-directory|export.json>`.
+- Optional Meta Model API incident analysis with server-side credentials, independent sanitized-audit verification, bounded evidence, schema/reference validation, administrator authorization, replay protection, and deterministic fallback. Tests use a mocked API boundary; live-provider behavior is not certified.
 - Container non-root execution, dropped capabilities, `no-new-privileges`, read-only service filesystems, health checks, and private node networking.
 - Regression tests for replay protection, role primitives, quarantine enforcement, and metrics.
 
@@ -24,5 +25,6 @@
 - Metrics are JSON counters rather than a Prometheus exposition endpoint.
 - Alerting is not automated; rule counters and audit events are available for integration.
 - The dashboard has no complete pagination or filtering UI for historical audit records.
+- Model analysis requires an operator-provisioned `MODEL_API_KEY`; model output is advisory and external evidence handling must be approved for the deployment.
 
 These boundaries are intentional. They prevent the project from claiming controls that are not present in the implementation.

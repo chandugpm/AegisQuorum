@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const { makePolicyUpdate, readJson, validatePolicyApprovals } = require('./core');
 const { validToken } = require('./runtime-config');
 const { RequestError, ReplayCache, requestSecurity, createMetrics, readJsonBody, createRateLimiter, clientKey } = require('./http-utils');
+const { createIncidentAnalyst } = require('./ai-analyst');
 
 function json(response, status, body, headers = {}) { response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', ...headers }); response.end(JSON.stringify(body)); }
 function equal(a, b) { return typeof a === 'string' && typeof b === 'string' && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)); }
@@ -26,7 +27,7 @@ function summarizeWorkflow(stage, result, index) {
   return { node: `node-${String.fromCharCode(97 + index)}`, ok, outcome: ok ? 'completed' : 'failed' };
 }
 
-function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDirectory, authorityTrustFile, serviceToken, adminToken, operatorToken = process.env.DASHBOARD_OPERATOR_TOKEN || undefined, quorum = Number(process.env.POLICY_QUORUM || 2), staticDirectory = path.join(__dirname, '..', 'public'), logger = console, rateLimiter = createRateLimiter(), replayCache = new ReplayCache(), metrics = createMetrics() }) {
+function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDirectory, authorityTrustFile, serviceToken, adminToken, operatorToken = process.env.DASHBOARD_OPERATOR_TOKEN || undefined, quorum = Number(process.env.POLICY_QUORUM || 2), staticDirectory = path.join(__dirname, '..', 'public'), logger = console, rateLimiter = createRateLimiter(), incidentRateLimiter = createRateLimiter({ perClientLimit: 5, globalLimit: 30 }), replayCache = new ReplayCache(), metrics = createMetrics(), incidentAnalyst = createIncidentAnalyst() }) {
   if (operatorToken === '') operatorToken = undefined;
   if (!validToken(adminToken) || !validToken(serviceToken) || (operatorToken !== undefined && !validToken(operatorToken))) throw new Error('dashboard, operator, and service tokens must be non-whitespace tokens of at least 32 characters');
   if (!Array.isArray(nodeUrls) || nodeUrls.length === 0) throw new Error('at least one node URL is required');
@@ -62,10 +63,15 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
       const isAdmin = equal(suppliedAdmin, adminToken);
       const isOperator = operatorToken !== undefined && equal(suppliedOperator, operatorToken);
       if (!isAdmin && !isOperator) { metrics.increment('auth_failures_total'); return json(response, 401, { error: 'administrator-or-operator-token-required' }); }
-      if (isOperator && route === '/api/demo') { metrics.increment('authorization_denials_total'); return json(response, 403, { error: 'admin-role-required' }); }
-      const mutation = route === '/api/policy' || route === '/api/demo';
+      if (isOperator && (route === '/api/demo' || route === '/api/incident-analysis')) { metrics.increment('authorization_denials_total'); return json(response, 403, { error: 'admin-role-required' }); }
+      const mutation = route === '/api/policy' || route === '/api/demo' || route === '/api/incident-analysis';
       const security = mutation ? requestSecurity(request, replayCache, { required: true }) : { checked: false };
       const input = await readJsonBody(request);
+      if (route === '/api/incident-analysis') {
+        if (!incidentRateLimiter.allow(clientKey(request))) return json(response, 429, { error: 'incident-analysis-rate-limited' });
+        const [nodeStatuses, reports] = await Promise.all([statuses(), auditReports()]);
+        return json(response, 200, await incidentAnalyst.analyze({ statuses: nodeStatuses, reports }));
+      }
       if (route === '/api/policy') {
         if (!input.update || typeof input.update !== 'object' || Array.isArray(input.update) || !Array.isArray(input.approvals)) return json(response, 400, { error: 'invalid-policy-request' });
         return await serializePolicy(async () => {

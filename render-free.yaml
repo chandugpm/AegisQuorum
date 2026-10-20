@@ -19,3 +19,7 @@ services:
         sync: false
       - key: NODE_SERVICE_TOKEN
         sync: false
+      - key: MODEL_API_KEY
+        sync: false
+      - key: META_MODEL_ID
+        value: muse-spark-1.3

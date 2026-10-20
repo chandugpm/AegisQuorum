@@ -70,6 +70,8 @@ services:
       DASHBOARD_ADMIN_TOKEN: ${DASHBOARD_ADMIN_TOKEN:?set DASHBOARD_ADMIN_TOKEN in .env}
       DASHBOARD_OPERATOR_TOKEN: ${DASHBOARD_OPERATOR_TOKEN:?set DASHBOARD_OPERATOR_TOKEN in .env}
       POLICY_QUORUM: ${POLICY_QUORUM:-2}
+      MODEL_API_KEY: ${MODEL_API_KEY:-}
+      META_MODEL_ID: ${META_MODEL_ID:-muse-spark-1.3}
     volumes: ["security-state:/app/.runtime:ro"]
     networks:
       - security-internal

@@ -30,13 +30,13 @@ function requestText(url) {
 }
 async function waitFor(server) { if (!server.listening) await once(server, 'listening'); }
 async function close(server) { if (server.listening) await new Promise(resolve => server.close(resolve)); }
-async function fixture(t, { nodeUrls, rateLimiter, quorum = 2, configuredOperatorToken = operatorToken } = {}) {
+async function fixture(t, { nodeUrls, rateLimiter, incidentRateLimiter, incidentAnalyst, quorum = 2, configuredOperatorToken = operatorToken } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'danms-dashboard-')); t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const authorities = createAuthorities(path.join(root, 'authorities')); const trust = path.join(root, 'trust.json'); writeJsonAtomic(trust, authorityTrust(authorities));
   const nodes = nodeUrls ? [] : ['node-a', 'node-b', 'node-c'].map(name => startNode({ directory: path.join(root, name), name, authorityFile: trust, port: 0, serviceToken, quorum }));
   await Promise.all(nodes.map(node => waitFor(node.server))); t.after(async () => { await Promise.all(nodes.map(node => close(node.server))); });
   const urls = nodeUrls || nodes.map(node => `http://127.0.0.1:${node.server.address().port}`);
-  const dashboard = startDashboard({ port: 0, authorityDirectory: path.join(root, 'authorities'), authorityTrustFile: trust, nodeUrls: urls, serviceToken, adminToken, operatorToken: configuredOperatorToken, quorum, rateLimiter: rateLimiter || createRateLimiter({ perClientLimit: 100, globalLimit: 100 }) });
+  const dashboard = startDashboard({ port: 0, authorityDirectory: path.join(root, 'authorities'), authorityTrustFile: trust, nodeUrls: urls, serviceToken, adminToken, operatorToken: configuredOperatorToken, quorum, rateLimiter: rateLimiter || createRateLimiter({ perClientLimit: 100, globalLimit: 100 }), incidentRateLimiter, incidentAnalyst });
   await waitFor(dashboard); t.after(() => close(dashboard));
   return { root, nodes, authorities, base: `http://127.0.0.1:${dashboard.address().port}` };
 }
@@ -56,6 +56,8 @@ test('dashboard reports sanitized live state and executes the authenticated real
   assert.equal(page.status, 200);
   assert.equal(page.body.includes(adminToken), false);
   assert.equal(page.body.includes(serviceToken), false);
+  assert.equal(page.body.includes('MODEL_API_KEY'), false);
+  assert.equal(page.body.includes('api.meta.ai'), false);
 
   const deniedPolicy = await requestJson(`${f.base}/api/policy`, { method: 'POST', body: { payload: { enforcement: 'observe-only' } } });
   const deniedDemo = await requestJson(`${f.base}/api/demo`, { method: 'POST', body: {} });
@@ -89,6 +91,40 @@ test('policy submission rejects missing and invalid administrator tokens and acc
   assert.equal(valid.status, 200);
   assert.deepEqual(valid.body.approvals, ['authority-1', 'authority-2']);
   assert.ok(valid.body.results.every(result => result.ok));
+});
+
+test('incident analysis is admin-only, replay-protected, and separately rate limited', async t => {
+  let analyses = 0;
+  const f = await fixture(t, {
+    incidentRateLimiter: createRateLimiter({ perClientLimit: 1, globalLimit: 1 }),
+    incidentAnalyst: { analyze: async ({ statuses, reports }) => {
+      analyses++;
+      assert.equal(statuses.length, 3);
+      assert.equal(reports.length, 3);
+      return { analysisStatus: 'fallback', providerStatus: 'not-configured', analysis: { incidentSummary: { statement: 'deterministic' } } };
+    } }
+  });
+  const missing = await requestJson(`${f.base}/api/incident-analysis`, { method: 'POST', body: {} });
+  const invalid = await requestJson(`${f.base}/api/incident-analysis`, { method: 'POST', headers: { 'x-dashboard-admin-token': 'invalid' }, body: {} });
+  const operator = await requestJson(`${f.base}/api/incident-analysis`, { method: 'POST', headers: { 'x-dashboard-operator-token': operatorToken }, body: {} });
+  assert.equal(missing.status, 401);
+  assert.equal(invalid.status, 401);
+  assert.equal(operator.status, 403);
+  assert.equal(analyses, 0);
+
+  const replayHeaders = { 'x-dashboard-admin-token': adminToken, 'x-request-id': 'incident-analysis-replay', 'x-request-timestamp': String(Date.now()) };
+  const valid = await requestJson(`${f.base}/api/incident-analysis`, { method: 'POST', headers: replayHeaders, body: {} });
+  const replay = await requestJson(`${f.base}/api/incident-analysis`, { method: 'POST', headers: replayHeaders, body: {} });
+  const limited = await requestJson(`${f.base}/api/incident-analysis`, { method: 'POST', headers: { 'x-dashboard-admin-token': adminToken }, body: {} });
+  assert.equal(valid.status, 200);
+  assert.equal(valid.body.analysisStatus, 'fallback');
+  assert.deepEqual(valid.body.analysis.incidentSummary, { statement: 'deterministic' });
+  assert.equal(replay.status, 409);
+  assert.equal(replay.body.error, 'replayed-request');
+  assert.equal(limited.status, 429);
+  assert.equal(limited.body.error, 'incident-analysis-rate-limited');
+  assert.equal(analyses, 1);
+  assert.equal(JSON.stringify(valid.body).includes(adminToken), false);
 });
 
 test('dashboard mutations require replay headers and serialize concurrent policy sequences', async t => {

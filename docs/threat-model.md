@@ -31,8 +31,12 @@
 | Audit deletion or reordering | Hash-linked signed records plus state witness; sanitized exports carry an independently verifiable signed projection | Local deletion is only tamper-evident; external retention is required for immutability, and exported public keys require separate identity pinning |
 | Node outage | Dashboard reports offline state and returns partial-operation failure | No automatic quorum failover or cross-node consensus is implemented |
 | Credential leakage | Ignored runtime secrets, redacted audit exports, no secret metrics | Environment and host protections remain necessary |
+| Malicious or prompt-injected audit values | Analyst uses only independently verified, bounded event projections; event values are explicitly treated as untrusted; output citations are checked against event IDs | Model interpretation can still be wrong; this is advisory and must not authorize operations |
+| Model credential exposure or external evidence disclosure | API key remains server-side; API requests require admin auth, replay protection, and a dedicated rate limit; only sanitized audit events/status are sent | Model provider receives operational evidence; deployment operators must assess data-handling terms, account controls, and incident sensitivity |
 | Container breakout | Non-root user, dropped capabilities, read-only filesystems, no-new-privileges | Host or kernel compromise remains out of scope |
 
 ## Residual risks and non-claims
 
 This project does not implement mTLS, certificate rotation, HSM-backed keys, external immutable logging, firewall-enforced quarantine, Prometheus exposition, automated alert delivery, or production-grade multi-node consensus. Hash chaining provides tamper evidence, not automatic immutability. A successful test run is not a production-readiness claim.
+
+The Meta Model API analyst is not a source of truth. It cannot prove attribution or intent, and a schema-valid response may still be inaccurate. Provider timeout, missing credentials, and other errors are surfaced as deterministic fallback statuses; no live API access is assumed by the test suite.

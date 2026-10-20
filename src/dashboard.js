@@ -6,6 +6,7 @@ const { makePolicyUpdate, readJson, validatePolicyApprovals } = require('./core'
 const { validToken } = require('./runtime-config');
 const { RequestError, ReplayCache, requestSecurity, createMetrics, readJsonBody, createRateLimiter, clientKey } = require('./http-utils');
 const { createIncidentAnalyst } = require('./ai-analyst');
+const { createTimeline } = require('./timeline');
 
 function json(response, status, body, headers = {}) { response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', ...headers }); response.end(JSON.stringify(body)); }
 function equal(a, b) { return typeof a === 'string' && typeof b === 'string' && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)); }
@@ -56,6 +57,10 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         return json(response, 200, { update: makePolicyUpdate(sequence, { enforcement: 'observe-only', changeWindow: 'operator-requested' }), quorum });
       }
       if (request.method === 'GET' && route === '/api/audit') return json(response, 200, { nodes: await auditReports() }, url.searchParams.get('download') === '1' ? { 'content-disposition': 'attachment; filename="danms-audit-evidence.json"' } : {});
+      if (request.method === 'GET' && route === '/api/timeline') {
+        const [nodeStatuses, reports] = await Promise.all([statuses(), auditReports()]);
+        return json(response, 200, createTimeline(nodeStatuses, reports));
+      }
       if (request.method === 'GET' && route === '/metrics') return json(response, 200, metrics.snapshot());
       if (request.method !== 'POST') return json(response, 404, { error: 'not-found' });
       const suppliedAdmin = request.headers['x-dashboard-admin-token'];
@@ -63,14 +68,52 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
       const isAdmin = equal(suppliedAdmin, adminToken);
       const isOperator = operatorToken !== undefined && equal(suppliedOperator, operatorToken);
       if (!isAdmin && !isOperator) { metrics.increment('auth_failures_total'); return json(response, 401, { error: 'administrator-or-operator-token-required' }); }
-      if (isOperator && (route === '/api/demo' || route === '/api/incident-analysis')) { metrics.increment('authorization_denials_total'); return json(response, 403, { error: 'admin-role-required' }); }
-      const mutation = route === '/api/policy' || route === '/api/demo' || route === '/api/incident-analysis';
+      if (isOperator && (route === '/api/demo' || route === '/api/incident-analysis' || route === '/api/incident-response')) { metrics.increment('authorization_denials_total'); return json(response, 403, { error: 'admin-role-required' }); }
+      const mutation = route === '/api/policy' || route === '/api/demo' || route === '/api/incident-analysis' || route === '/api/incident-response';
       const security = mutation ? requestSecurity(request, replayCache, { required: true }) : { checked: false };
       const input = await readJsonBody(request);
       if (route === '/api/incident-analysis') {
         if (!incidentRateLimiter.allow(clientKey(request))) return json(response, 429, { error: 'incident-analysis-rate-limited' });
         const [nodeStatuses, reports] = await Promise.all([statuses(), auditReports()]);
         return json(response, 200, await incidentAnalyst.analyze({ statuses: nodeStatuses, reports }));
+      }
+      if (route === '/api/incident-response') {
+        if (typeof input.node !== 'string' || !/^node-[a-c]$/.test(input.node) || !['scan', 'verify-snapshot', 'recover'].includes(input.action)) return json(response, 400, { error: 'invalid-incident-response' });
+        const index = input.node.charCodeAt(input.node.length - 1) - 97;
+        if (index >= nodeUrls.length) return json(response, 404, { error: 'node-not-found' });
+        const nodeUrl = nodeUrls[index];
+        const downstream = stage => ({ id: `${crypto.createHash('sha256').update(security.id).digest('hex').slice(0, 32)}:${stage}`, timestamp: security.timestamp });
+        if (input.action === 'verify-snapshot') {
+          const snapshot = await requestJson(`${nodeUrl}/snapshot`).catch(() => ({ status: 503, body: {} }));
+          if (snapshot.status !== 200) return json(response, 503, { node: input.node, action: 'verify-snapshot', operationStatus: 'failed', error: 'node-unavailable' });
+          return json(response, snapshot.body.valid === true ? 200 : 409, {
+            node: input.node, action: 'verify-snapshot',
+            operationStatus: snapshot.body.valid === true ? 'verified' : 'rejected',
+            snapshotVerified: snapshot.body.valid === true
+          });
+        }
+        if (input.action === 'scan') {
+          const result = await requestJson(`${nodeUrl}/scan`, 'POST', {}, serviceToken, downstream('incident-scan')).catch(() => ({ status: 503, body: {} }));
+          if (result.status !== 200) return json(response, 503, { node: input.node, action: 'scan', operationStatus: 'failed', error: 'node-unavailable' });
+          return json(response, 200, {
+            node: input.node,
+            action: 'scan',
+            operationStatus: result.body.clean ? 'clean' : result.body.quarantined ? 'quarantined' : 'failed',
+            integrity: result.body.clean ? 'verified-clean' : 'mismatch-or-unverifiable',
+            quarantined: Boolean(result.body.quarantined),
+            safeMode: Boolean(result.body.safeMode)
+          });
+        }
+        const current = await requestJson(`${nodeUrl}/status`).catch(() => ({ status: 503, body: {} }));
+        if (current.status !== 200) return json(response, 503, { node: input.node, action: 'recover', operationStatus: 'failed', error: 'node-unavailable' });
+        if (current.body.quarantined !== true) return json(response, 409, { node: input.node, action: 'recover', operationStatus: 'rejected', error: 'node-not-quarantined' });
+        const snapshot = await requestJson(`${nodeUrl}/snapshot`).catch(() => ({ status: 503, body: {} }));
+        if (snapshot.status !== 200 || snapshot.body.valid !== true) return json(response, 409, { node: input.node, action: 'recover', operationStatus: 'rejected', error: 'trusted-snapshot-invalid' });
+        const restored = await requestJson(`${nodeUrl}/rollback`, 'POST', {}, serviceToken, downstream('incident-recovery')).catch(() => ({ status: 503, body: {} }));
+        if (restored.status !== 200 || restored.body.restored !== true) return json(response, 503, { node: input.node, action: 'recover', operationStatus: 'failed', error: restored.body.reason || 'recovery-failed' });
+        const verification = await requestJson(`${nodeUrl}/scan`, 'POST', {}, serviceToken, downstream('incident-post-recovery-scan')).catch(() => ({ status: 503, body: {} }));
+        if (verification.status !== 200 || verification.body.clean !== true) return json(response, 503, { node: input.node, action: 'recover', operationStatus: 'post-recovery-check-failed', restored: true, postRecoveryVerified: false });
+        return json(response, 200, { node: input.node, action: 'recover', operationStatus: 'verified', restored: true, postRecoveryVerified: true, digest: verification.body.digest });
       }
       if (route === '/api/policy') {
         if (!input.update || typeof input.update !== 'object' || Array.isArray(input.update) || !Array.isArray(input.approvals)) return json(response, 400, { error: 'invalid-policy-request' });

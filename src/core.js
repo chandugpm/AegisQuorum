@@ -11,7 +11,8 @@ const stable = (value) => {
 const encoded = (value) => Buffer.from(value).toString('base64');
 const decoded = (value) => Buffer.from(value, 'base64');
 const now = () => new Date().toISOString();
-const SNAPSHOT_VERSION = 2;
+const SNAPSHOT_VERSION = 3;
+const SUPPORTED_SNAPSHOT_VERSIONS = [2, SNAPSHOT_VERSION];
 const snapshotIdIsSafe = (id) => typeof id === 'string' && /^[A-Za-z0-9-]{1,128}$/.test(id);
 const auditEvidenceCanonical = (record) => stable({
   index: record.index,
@@ -64,6 +65,21 @@ function verifySanitizedAuditEvidence(report) {
   if (proof.head !== previousHash) return { valid: false, index: proof.records.length, reason: 'evidence-witness-mismatch' };
   return { valid: true, entries: proof.records.length, head: previousHash };
 }
+function verifySanitizedAuditEvidenceWithTrust(report, trustedPublicKey) {
+  const trusted = ed25519PublicKey(trustedPublicKey);
+  if (!trusted) return { valid: false, reason: 'trusted-key-missing-invalid-or-unsupported' };
+  const proofKey = ed25519PublicKey(report?.proof?.publicKey);
+  if (!proofKey) return { valid: false, reason: 'evidence-public-key-invalid-or-unsupported' };
+  if (trusted.fingerprint !== proofKey.fingerprint ||
+      trusted.fingerprint !== report?.nodePublicKeyFingerprint) return {
+    valid: false,
+    reason: 'trusted-key-fingerprint-mismatch',
+    trustedFingerprint: trusted.fingerprint,
+    evidenceFingerprint: report?.nodePublicKeyFingerprint
+  };
+  const result = verifySanitizedAuditEvidence(report);
+  return result.valid ? { ...result, signerFingerprint: trusted.fingerprint, signatureAlgorithm: 'Ed25519' } : result;
+}
 
 function ensureDirectory(directory) { fs.mkdirSync(directory, { recursive: true }); }
 function writeJsonAtomic(filename, value) {
@@ -89,6 +105,62 @@ function createIdentity(directory, name) {
 function sign(privateKey, payload) { return encoded(crypto.sign(null, Buffer.from(payload), privateKey)); }
 function verify(publicKey, payload, signature) {
   try { return crypto.verify(null, Buffer.from(payload), publicKey, decoded(signature)); } catch { return false; }
+}
+function normalizedPublicKey(publicKey) {
+  return typeof publicKey === 'string' ? `${publicKey.trim().replace(/\r\n/g, '\n')}\n` : '';
+}
+function ed25519PublicKey(publicKey) {
+  try {
+    const normalized = normalizedPublicKey(publicKey);
+    const key = crypto.createPublicKey(normalized);
+    return key.asymmetricKeyType === 'ed25519' ? { key, pem: normalized, fingerprint: sha256(normalized) } : null;
+  } catch {
+    return null;
+  }
+}
+function verifySnapshotArtifact(artifactBytes, { nodeName, snapshotId, expectedArtifactDigest, trustedPublicKey } = {}) {
+  const fail = (reason, fields = {}) => ({ valid: false, reason, ...fields });
+  if (!Buffer.isBuffer(artifactBytes) || artifactBytes.length === 0 || artifactBytes.length > 16 * 1024 * 1024) return fail('snapshot-artifact-size-invalid');
+  const artifactDigest = sha256(artifactBytes);
+  if (typeof expectedArtifactDigest !== 'string' || !/^[a-f0-9]{64}$/.test(expectedArtifactDigest) || artifactDigest !== expectedArtifactDigest) {
+    return fail('snapshot-artifact-digest-mismatch', { artifactDigest });
+  }
+  const trusted = ed25519PublicKey(trustedPublicKey);
+  if (!trusted) return fail('trusted-key-invalid-or-unsupported', { artifactDigest });
+  let snapshot;
+  try { snapshot = JSON.parse(artifactBytes.toString('utf8')); }
+  catch { return fail('snapshot-artifact-invalid-json', { artifactDigest }); }
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot) ||
+      !SUPPORTED_SNAPSHOT_VERSIONS.includes(snapshot.version)) return fail('snapshot-format-unsupported', { artifactDigest });
+  const signatureAlgorithm = snapshot.version >= 3 ? snapshot.signatureAlgorithm : 'Ed25519';
+  const signerFingerprint = snapshot.version >= 3 ? snapshot.signerKeyId : snapshot.identityFingerprint;
+  if (signatureAlgorithm !== 'Ed25519') return fail('snapshot-signature-algorithm-unsupported', { artifactDigest, signatureAlgorithm });
+  if (typeof snapshotId !== 'string' || !/^[A-Za-z0-9-]{1,128}$/.test(snapshotId) ||
+      typeof nodeName !== 'string' || snapshot.nodeName !== nodeName) return fail('snapshot-identity-mismatch', { artifactDigest });
+  if (signerFingerprint !== trusted.fingerprint || snapshot.identityFingerprint !== trusted.fingerprint) {
+    return fail('snapshot-signer-fingerprint-mismatch', { artifactDigest, signerFingerprint, trustedFingerprint: trusted.fingerprint });
+  }
+  if (typeof snapshot.reason !== 'string' || !snapshot.reason || typeof snapshot.createdAt !== 'string' ||
+      Number.isNaN(Date.parse(snapshot.createdAt)) || Date.parse(snapshot.createdAt) > Date.now() + 300000 ||
+      typeof snapshot.content !== 'string' || typeof snapshot.digest !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(snapshot.digest) || typeof snapshot.signature !== 'string' ||
+      !/^[A-Za-z0-9+/]{86}==$/.test(snapshot.signature) ||
+      Buffer.from(snapshot.signature, 'base64').toString('base64') !== snapshot.signature) return fail('snapshot-metadata-invalid', { artifactDigest, signatureAlgorithm, signerFingerprint });
+  const content = decoded(snapshot.content);
+  if (content.toString('base64') !== snapshot.content || sha256(content) !== snapshot.digest) {
+    return fail('snapshot-content-digest-mismatch', { artifactDigest, signatureAlgorithm, signerFingerprint });
+  }
+  const { signature, ...unsigned } = snapshot;
+  if (!verify(trusted.pem, stable(unsigned), signature)) return fail('snapshot-signature-invalid', { artifactDigest, signatureAlgorithm, signerFingerprint });
+  return {
+    valid: true,
+    artifactDigest,
+    contentDigest: snapshot.digest,
+    snapshotId,
+    snapshotVersion: snapshot.version,
+    signatureAlgorithm,
+    signerFingerprint
+  };
 }
 function policyDigest(update) { return sha256(stable(update)); }
 function makePolicyUpdate(sequence, payload, issuedAt = now()) { return { kind: 'policy-update', sequence, issuedAt, payload }; }
@@ -171,11 +243,27 @@ class SecurityNode {
   createTrustedSnapshot(reason) {
     const content = fs.readFileSync(this.paths.protected);
     const digest = sha256(content);
-    const snapshot = { version: SNAPSHOT_VERSION, nodeName: this.name, identityFingerprint: sha256(this.identity.publicKey), createdAt: this.clock(), reason, digest, content: encoded(content) };
+    const signerKeyId = sha256(this.identity.publicKey);
+    const snapshot = { version: SNAPSHOT_VERSION, signatureAlgorithm: 'Ed25519', signerKeyId, nodeName: this.name, identityFingerprint: signerKeyId, createdAt: this.clock(), reason, digest, content: encoded(content) };
     snapshot.signature = sign(this.identity.privateKey, stable(snapshot));
     const id = `${Date.now()}-${digest.slice(0, 12)}`;
-    writeJsonAtomic(path.join(this.paths.snapshots, `${id}.json`), snapshot);
-    this.state.trustedSnapshot = id; this.saveState(); this.appendAudit('snapshot-created', { id, digest, reason }); return id;
+    const filename = path.join(this.paths.snapshots, `${id}.json`);
+    writeJsonAtomic(filename, snapshot);
+    const verification = this.verifySnapshot(id);
+    if (!verification.valid) throw new Error(`trusted-snapshot-write-verification-failed:${verification.reason}`);
+    this.state.trustedSnapshot = id; this.saveState();
+    this.appendAudit('snapshot-created', {
+      id,
+      digest,
+      artifactDigest: verification.artifactDigest,
+      signatureAlgorithm: 'Ed25519',
+      signerFingerprint: signerKeyId,
+      snapshotSignatureVerified: true,
+      snapshotContentDigestVerified: true,
+      snapshotArtifactDigestVerified: true,
+      reason
+    });
+    return id;
   }
   readSnapshot(id = this.state.trustedSnapshot) { return snapshotIdIsSafe(id) ? readJson(path.join(this.paths.snapshots, `${id}.json`), null) : null; }
   verifySnapshot(id = this.state.trustedSnapshot) {
@@ -183,17 +271,22 @@ class SecurityNode {
     const filename = path.join(this.paths.snapshots, `${id}.json`);
     if (!fs.existsSync(filename)) return { valid: false, reason: 'snapshot-missing' };
     let snapshot;
-    try { snapshot = readJson(filename, null); } catch { return { valid: false, reason: 'snapshot-unreadable' }; }
+    let artifactBytes;
+    try {
+      artifactBytes = fs.readFileSync(filename);
+      snapshot = JSON.parse(artifactBytes.toString('utf8'));
+    } catch { return { valid: false, reason: 'snapshot-unreadable' }; }
     if (!snapshot || typeof snapshot.content !== 'string' || typeof snapshot.digest !== 'string' || typeof snapshot.signature !== 'string') return { valid: false, reason: 'snapshot-malformed' };
     try {
       const { signature, ...unsigned } = snapshot;
       if (snapshot.version !== undefined) {
-        if (snapshot.version !== SNAPSHOT_VERSION || snapshot.nodeName !== this.name || snapshot.identityFingerprint !== sha256(this.identity.publicKey) || typeof snapshot.reason !== 'string' || !snapshot.reason || typeof snapshot.createdAt !== 'string' || Number.isNaN(Date.parse(snapshot.createdAt)) || Date.parse(snapshot.createdAt) > Date.now() + 300000) return { valid: false, reason: 'snapshot-metadata-invalid' };
+        if (!SUPPORTED_SNAPSHOT_VERSIONS.includes(snapshot.version) || snapshot.nodeName !== this.name || snapshot.identityFingerprint !== sha256(this.identity.publicKey) || typeof snapshot.reason !== 'string' || !snapshot.reason || typeof snapshot.createdAt !== 'string' || Number.isNaN(Date.parse(snapshot.createdAt)) || Date.parse(snapshot.createdAt) > Date.now() + 300000 ||
+            (snapshot.version >= 3 && (snapshot.signatureAlgorithm !== 'Ed25519' || snapshot.signerKeyId !== sha256(this.identity.publicKey)))) return { valid: false, reason: 'snapshot-metadata-invalid' };
       }
       const content = decoded(snapshot.content);
       if (sha256(content) !== snapshot.digest) return { valid: false, reason: 'content-digest-mismatch' };
       if (!verify(this.identity.publicKey, stable(unsigned), signature)) return { valid: false, reason: 'snapshot-signature-invalid' };
-      return { valid: true, snapshot };
+      return { valid: true, snapshot, artifactDigest: sha256(artifactBytes) };
     } catch { return { valid: false, reason: 'snapshot-malformed' }; }
   }
   validatePolicy(update, approvals) {
@@ -233,8 +326,19 @@ class SecurityNode {
       fs.renameSync(temporary, this.paths.protected);
       if (this.digestProtected() !== result.snapshot.digest) return this.enterSafeMode('rollback-post-write-verification-failed');
       const postRecoverySnapshot = this.verifySnapshot(id);
-      if (!postRecoverySnapshot.valid || this.digestProtected() !== postRecoverySnapshot.snapshot.digest) return this.enterSafeMode('rollback-post-recovery-check-failed');
-      this.state.mode = 'trusted'; this.state.quarantined = false; this.saveState(); this.appendAudit('rollback-verified', { id, before, restored: result.snapshot.digest });
+      if (!postRecoverySnapshot.valid || postRecoverySnapshot.artifactDigest !== result.artifactDigest ||
+          this.digestProtected() !== postRecoverySnapshot.snapshot.digest) return this.enterSafeMode('rollback-post-recovery-check-failed');
+      this.state.mode = 'trusted'; this.state.quarantined = false; this.saveState(); this.appendAudit('rollback-verified', {
+        id,
+        before,
+        restored: result.snapshot.digest,
+        artifactDigest: result.artifactDigest,
+        signatureAlgorithm: result.snapshot.signatureAlgorithm || 'Ed25519',
+        signerFingerprint: result.snapshot.signerKeyId || result.snapshot.identityFingerprint,
+        snapshotSignatureVerified: true,
+        snapshotContentDigestVerified: true,
+        snapshotArtifactDigestVerified: true
+      });
       return { restored: true, digest: result.snapshot.digest, id };
     } catch (error) {
       if (temporary) fs.rmSync(temporary, { force: true });
@@ -268,4 +372,4 @@ class SecurityNode {
   status() { return { name: this.name, nodePublicKeyFingerprint: sha256(this.identity.publicKey).slice(0, 16), mode: this.state.mode, quarantined: this.state.quarantined, lastPolicySequence: this.state.lastPolicySequence, trustedSnapshot: this.state.trustedSnapshot, currentDigest: this.digestProtected(), audit: this.verifyAudit() }; }
 }
 
-module.exports = { SecurityNode, sha256, stable, createAuthorities, authorityTrust, makePolicyUpdate, approvePolicy, validatePolicyApprovals, policyDigest, verify, verifySanitizedAuditEvidence, readJson, writeJsonAtomic, SNAPSHOT_VERSION };
+module.exports = { SecurityNode, sha256, stable, createAuthorities, authorityTrust, makePolicyUpdate, approvePolicy, validatePolicyApprovals, policyDigest, verify, verifySanitizedAuditEvidence, verifySanitizedAuditEvidenceWithTrust, verifySnapshotArtifact, readJson, writeJsonAtomic, SNAPSHOT_VERSION };

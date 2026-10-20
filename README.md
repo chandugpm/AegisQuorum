@@ -54,8 +54,18 @@ The tests cover:
 - HTTP authentication and rate limiting
 - Meta analyst evidence sanitization, structured-output/reference validation, and provider-failure fallbacks
 - Admin-only incident-analysis authentication, replay protection, and rate limiting
+- Verified timeline projections, independent recovery reporting, and human-confirmed incident actions
+- Audit-only and full recovery CLI verification with external trust records, exact snapshot artifact digests, and fail-closed evidence checks
 - Runtime token handling
 - Three-node integration behavior
+
+Run the complete isolated security workflow against temporary state:
+
+```bash
+npm run demo-security
+```
+
+The demo creates temporary authority keys and three node stores, verifies the initial state, applies a correctly signed 2-of-3 policy update, rejects a replay, creates controlled tampering, confirms quarantine, exercises the deterministic analyst fallback without a model API call, and runs administrator-confirmed recovery with a post-recovery integrity scan. It then independently verifies the sanitized audit export and recovery report. Temporary state and generated credentials are removed on completion; the command does not read or modify `.runtime`, call Meta, deploy, or print credentials.
 
 ## Docker Compose
 
@@ -152,7 +162,9 @@ Each command prints one approval object. Combine the required, distinct approval
 - `GET /api/status` returns sanitized node status.
 - `GET /api/policy/proposal` creates the next unsigned proposal.
 - `GET /api/audit` returns sanitized audit evidence.
+- `GET /api/timeline` returns chronologically ordered events from independently verified sanitized audit exports, with missing-data indicators.
 - `POST /api/incident-analysis` returns a live or deterministic evidence-referenced incident analysis.
+- `POST /api/incident-response` runs an administrator-confirmed `scan`, `verify-snapshot`, or quarantined-node `recover` action; recovery only reports success after a clean post-recovery scan.
 - `POST /api/policy` submits an update with independent authority approvals.
 - `POST /api/demo` runs the complete tamper-recovery workflow.
 
@@ -209,6 +221,40 @@ Verify a sanitized audit export downloaded from `GET /api/audit?download=1`:
 ```bash
 npm run verify-audit -- .\audit-evidence.json
 ```
+
+Create an independently provisioned, public-only node trust record outside the audit export. Its schema is:
+
+```json
+{
+  "format": "danms-node-trust-v1",
+  "node": "node-a",
+  "algorithm": "Ed25519",
+  "fingerprint": "<SHA-256 of normalized PEM UTF-8 bytes>",
+  "publicKey": "<node SPKI PEM public key>"
+}
+```
+
+Obtain the public key and expected fingerprint from the node enrollment/trust process over a channel independent of the audit export; validate the fingerprint before storing the trust record in a protected verifier trust store. The fingerprint is SHA-256 over the UTF-8 PEM after converting CRLF to LF, trimming surrounding whitespace, and adding one final LF. Do not create this trust record by copying the export's embedded key and treating it as trusted.
+
+Verify audit evidence and the recorded recovery/post-recovery events without the original snapshot:
+
+```bash
+npm run verify-recovery -- ./audit-evidence.json --node node-a --trusted-key ./trust/node-a.json
+```
+
+This is **audit-only** verification. It verifies the exported Ed25519 audit signatures using the supplied trust anchor and checks that a recorded successful restore is followed by an integrity event whose digest matches the recorded restored digest. It does **not** authenticate the original snapshot: the export excludes its bytes, so the report explicitly says `not-verified-artifact-not-supplied`.
+
+For **full recovery** verification, also supply the original snapshot JSON artifact copied from the node's `snapshots` store (the file named by `snapshotId` in the report):
+
+```bash
+npm run verify-recovery -- ./audit-evidence.json --node node-a --trusted-key ./trust/node-a.json --snapshot ./node-a-snapshot.json
+```
+
+Full verification requires all audit-only checks plus the original artifact. It checks the exact artifact-byte SHA-256 recorded in the signed `snapshot-created` event, validates the Ed25519 signature on the canonicalized snapshot object, checks node/key identity and content digest, and compares the restore and post-recovery integrity digests. Audit-chain validity, snapshot authenticity, and post-recovery integrity are reported separately. A missing or mismatched artifact, invalid signature, missing/untrusted key, or failed post-recovery check makes full verification fail. The verifier never reports an absent artifact as verified. Snapshot content remains out of the sanitized export.
+
+Snapshot format v3 records `signatureAlgorithm: "Ed25519"` and the signer key fingerprint. Its signature is over the stable canonical JSON representation of the snapshot object excluding `signature`; it is **not** a signature over the raw JSON file bytes. The audit event separately records SHA-256 of the exact serialized artifact bytes (including formatting/newline). Existing v2 snapshots remain usable by nodes; old audit exports lacking the artifact-digest metadata can be checked audit-only but cannot pass full artifact verification.
+
+See [docs/recovery-verification.md](docs/recovery-verification.md) for trust-store provisioning, output semantics, reproducible examples, and limitations.
 
 The exported evidence includes a signed chain over its sanitized event projection and detects edits, omissions, reordering, and appended records. Its embedded public key is self-asserted; for identity assurance, compare its fingerprint against a separately trusted node identity. Hash chains and node-held signing keys do not provide external immutability or protect against a compromised node that can rewrite and re-sign its own records.
 

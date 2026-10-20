@@ -22,7 +22,9 @@ The application uses Node.js standard-library modules only (`crypto`, `http`, `f
 ## Persistence and recovery
 
 - JSON persistence uses a sibling temporary file and rename; it is not a transactional database and is not protected from host-level rollback.
-- Snapshot verification checks a content SHA-256 and node Ed25519 signature before writing. Bad evidence triggers safe mode.
+- Snapshot format v3 records an Ed25519 algorithm and signer fingerprint. The node signature covers stable canonical snapshot JSON excluding the signature field; it covers the encoded content and metadata, not the raw JSON artifact bytes. The node separately records SHA-256 of the exact serialized artifact bytes in the signed audit event.
+- `npm run verify-recovery` requires an independently provisioned node trust record and supports audit-only verification or full verification with the original snapshot file. It reports audit validity, snapshot authenticity, and post-recovery integrity independently, and fails closed for missing trust anchors or required full-mode evidence.
+- Existing v2 snapshots remain node-verifiable. Historical audit exports without exact artifact digests can be verified audit-only but cannot establish full artifact authenticity.
 - The audit log is signed and hash chained. Retain periodic signed audit-head checkpoints off-node to detect full log replacement/deletion.
 
 ## Network exposure

@@ -7,7 +7,9 @@
     "start": "node src/launch-local.js",
     "test": "node --test",
     "verify-audit": "node src/verify-audit.js",
-    "approve-policy": "node src/approve-policy.js"
+    "verify-recovery": "node src/verify-recovery.js",
+    "approve-policy": "node src/approve-policy.js",
+    "demo-security": "node src/demo-security.js"
   },
   "engines": { "node": ">=20" }
 }

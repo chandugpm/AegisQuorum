@@ -127,6 +127,53 @@ test('incident analysis is admin-only, replay-protected, and separately rate lim
   assert.equal(JSON.stringify(valid.body).includes(adminToken), false);
 });
 
+test('timeline includes only verified recorded events and exposes unavailable evidence limitations', async t => {
+  const f = await fixture(t);
+  const response = await requestJson(`${f.base}/api/timeline`);
+  assert.equal(response.status, 200);
+  assert.equal(response.body.events.length, 3);
+  assert.ok(response.body.events.every(event => event.id === event.evidenceRef));
+  assert.deepEqual(new Set(response.body.events.map(event => event.node)), new Set(['node-a', 'node-b', 'node-c']));
+  assert.ok(response.body.events.every(event => event.category === 'snapshot'));
+  assert.ok(response.body.limitations.some(item => item.includes('rejections are counters')));
+});
+
+test('human-approved incident actions are admin-only and recovery verifies the node after restore', async t => {
+  const f = await fixture(t);
+  const denied = await requestJson(`${f.base}/api/incident-response`, { method: 'POST', body: { node: 'node-a', action: 'scan' } });
+  const operator = await requestJson(`${f.base}/api/incident-response`, { method: 'POST', headers: { 'x-dashboard-operator-token': operatorToken }, body: { node: 'node-a', action: 'recover' } });
+  const prematureRecovery = await requestJson(`${f.base}/api/incident-response`, {
+    method: 'POST', headers: { 'x-dashboard-admin-token': adminToken }, body: { node: 'node-a', action: 'recover' }
+  });
+  assert.equal(denied.status, 401);
+  assert.equal(operator.status, 403);
+  assert.equal(prematureRecovery.status, 409);
+  assert.equal(prematureRecovery.body.error, 'node-not-quarantined');
+
+  f.nodes[0].node.simulateTamper();
+  const scan = await requestJson(`${f.base}/api/incident-response`, {
+    method: 'POST', headers: { 'x-dashboard-admin-token': adminToken }, body: { node: 'node-a', action: 'scan' }
+  });
+  assert.equal(scan.status, 200);
+  assert.equal(scan.body.operationStatus, 'quarantined');
+  assert.equal(f.nodes[0].node.status().mode, 'quarantined');
+
+  const recover = await requestJson(`${f.base}/api/incident-response`, {
+    method: 'POST', headers: { 'x-dashboard-admin-token': adminToken }, body: { node: 'node-a', action: 'recover' }
+  });
+  assert.equal(recover.status, 200);
+  assert.equal(recover.body.operationStatus, 'verified');
+  assert.equal(recover.body.restored, true);
+  assert.equal(recover.body.postRecoveryVerified, true);
+  assert.equal(f.nodes[0].node.status().mode, 'trusted');
+
+  const audit = await requestJson(`${f.base}/api/audit`);
+  const eventTypes = audit.body.nodes[0].events.map(event => event.type);
+  assert.ok(eventTypes.includes('tamper-detected'));
+  assert.ok(eventTypes.includes('rollback-verified'));
+  assert.ok(eventTypes.includes('integrity-ok'));
+});
+
 test('dashboard mutations require replay headers and serialize concurrent policy sequences', async t => {
   const f = await fixture(t);
   const signedPolicy = await approvedPolicy(f);

@@ -9,6 +9,7 @@ The application uses Node.js standard-library modules only (`crypto`, `http`, `f
 - Dashboard mutations require `X-Dashboard-Admin-Token` and node mutations require a different `X-Node-Service-Token`.
 - Equality checks use `timingSafeEqual` after length validation.
 - Tokens are never rendered into the page or an API response.
+- Policy proposals require distinct authority signatures; dashboard code loads only public trust keys and rejects unsigned, duplicate, invalid, and stale approvals.
 - The dashboard has no user/account/RBAC system; this is a local administrator model, not multi-user authorization.
 
 ## Secrets and keys
@@ -16,6 +17,7 @@ The application uses Node.js standard-library modules only (`crypto`, `http`, `f
 - Generated local development identities and tokens live in `.runtime/`, which `.gitignore` excludes.
 - Docker reads tokens from an untracked `.env`; production must inject them from its secret manager.
 - Node identity keys are private disk files in this MVP. They need OS ACLs and production replacement with HSM/KMS-backed non-exportable keys and rotation/revocation procedures.
+- The demo keeps generated authority identities in one runtime volume. Dashboard code reads public trust only, but its Compose mount still exposes the shared volume, and node containers also mount it. A compromised service with filesystem access could therefore read all authority private keys. Real deployments must separate signer keys from dashboard/node hosts and enforce independent custody.
 
 ## Persistence and recovery
 

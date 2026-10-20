@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { announceAdminToken, initializeAuthorityTrust, resolveRuntimeTokens } = require('../src/runtime-config');
 const { readJson, writeJsonAtomic } = require('../src/core');
-const { resolveDashboardPort } = require('../src/launch-local');
+const { createNodeEnvironment, resolveDashboardPort } = require('../src/launch-local');
 
 const adminEnvironmentToken = 'a'.repeat(32);
 const serviceEnvironmentToken = 'b'.repeat(32);
@@ -54,6 +54,32 @@ test('production startup announcement never logs the administrator token', () =>
   const messages = [];
   announceAdminToken({ environment: { NODE_ENV: 'production' }, adminToken: adminEnvironmentToken, logger: { log: message => messages.push(message) } });
   assert.deepEqual(messages, []);
+});
+
+test('development startup announcement confirms configuration without logging the administrator token', () => {
+  const messages = [];
+  announceAdminToken({ environment: {}, adminToken: adminEnvironmentToken, logger: { log: message => messages.push(message) } });
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].includes(adminEnvironmentToken), false);
+  assert.match(messages[0], /value withheld/);
+});
+
+test('local node child environments exclude dashboard and model credentials', () => {
+  const parent = {
+    PATH: 'test-path',
+    DASHBOARD_ADMIN_TOKEN: 'admin-test-value',
+    DASHBOARD_OPERATOR_TOKEN: 'operator-test-value',
+    MODEL_API_KEY: 'model-test-value',
+    META_MODEL_ID: 'muse-spark-1.3'
+  };
+  const child = createNodeEnvironment(parent, { NODE_SERVICE_TOKEN: 'node-service-test-value', NODE_NAME: 'node-a' });
+  assert.equal(child.PATH, parent.PATH);
+  assert.equal(child.NODE_SERVICE_TOKEN, 'node-service-test-value');
+  assert.equal(child.NODE_NAME, 'node-a');
+  for (const name of ['DASHBOARD_ADMIN_TOKEN', 'DASHBOARD_OPERATOR_TOKEN', 'MODEL_API_KEY', 'META_MODEL_ID']) {
+    assert.equal(Object.hasOwn(child, name), false);
+  }
+  assert.equal(parent.MODEL_API_KEY, 'model-test-value');
 });
 
 test('existing authority identities and matching trust are validated without overwriting trust material', t => {

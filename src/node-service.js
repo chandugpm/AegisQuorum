@@ -1,12 +1,12 @@
 const http = require('node:http');
 const { SecurityNode, readJson } = require('./core');
 const { validToken } = require('./runtime-config');
-const { RequestError, ReplayCache, requestSecurity, createMetrics, readJsonBody } = require('./http-utils');
+const { RequestError, ReplayCache, requestSecurity, createMetrics, readJsonBody, createRateLimiter, clientKey } = require('./http-utils');
 
 function json(response, status, body) { response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }); response.end(JSON.stringify(body)); }
 function secureEqual(a, b) { return typeof a === 'string' && typeof b === 'string' && a.length === b.length && require('node:crypto').timingSafeEqual(Buffer.from(a), Buffer.from(b)); }
 
-function startNode({ directory, name, authorityFile, port, host = '127.0.0.1', serviceToken, quorum = Number(process.env.POLICY_QUORUM || 2), replayCache = new ReplayCache(), metrics = createMetrics() }) {
+function startNode({ directory, name, authorityFile, port, host = '127.0.0.1', serviceToken, quorum = Number(process.env.POLICY_QUORUM || 2), replayCache = new ReplayCache(), metrics = createMetrics(), rateLimiter = createRateLimiter({ perClientLimit: 60, globalLimit: 300 }) }) {
   if (!validToken(serviceToken)) throw new Error('NODE_SERVICE_TOKEN must be a non-whitespace token of at least 32 characters');
   const trustedAuthorities = readJson(authorityFile, null);
   if (!trustedAuthorities || Object.keys(trustedAuthorities).length !== 3) throw new Error('authority trust file missing or invalid');
@@ -14,6 +14,7 @@ function startNode({ directory, name, authorityFile, port, host = '127.0.0.1', s
   const server = http.createServer(async (request, response) => {
     metrics.increment('http_requests_total');
     try {
+      if (!rateLimiter.allow(clientKey(request))) return json(response, 429, { error: 'rate-limited' });
       const route = new URL(request.url, 'http://node.local').pathname;
       if (request.method === 'GET' && route === '/health') return json(response, 200, { ok: true, node: name });
       if (request.method === 'GET' && route === '/status') return json(response, 200, node.status());
@@ -22,7 +23,8 @@ function startNode({ directory, name, authorityFile, port, host = '127.0.0.1', s
       if (request.method === 'GET' && route === '/snapshot') return json(response, 200, { valid: node.verifySnapshot().valid });
       if (request.method !== 'POST') return json(response, 404, { error: 'not-found' });
       if (!secureEqual(request.headers['x-node-service-token'], serviceToken)) { metrics.increment('auth_failures_total'); return json(response, 401, { error: 'unauthorized' }); }
-      const security = requestSecurity(request, replayCache);
+      if (!['/policy', '/scan', '/rollback', '/simulate-tamper'].includes(route)) return json(response, 404, { error: 'not-found' });
+      const security = requestSecurity(request, replayCache, { required: true });
       const payload = await readJsonBody(request);
       const result = route === '/policy' ? node.applyPolicy(payload.update, payload.approvals) : route === '/scan' ? node.scanIntegrity() : route === '/rollback' ? node.rollback(payload.snapshotId) : route === '/simulate-tamper' ? node.simulateTamper() : null;
       if (result) { if (security.checked) node.appendAudit('request-accepted', { requestId: security.id, route }); return json(response, 200, result); }

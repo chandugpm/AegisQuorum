@@ -21,17 +21,22 @@
 | Scenario | Mitigation | Residual risk |
 |---|---|---|
 | One authority is compromised | Configurable quorum, defaulting to two distinct Ed25519 approvals | Quorum compromise can still authorize a policy |
+| Dashboard or node filesystem compromise | Policy API requires independent signatures and service code reads public trust for validation | Compose shares the runtime volume containing all authority private keys with node containers and mounts it read-only in the dashboard; host/process compromise can expose all signers |
 | Old policy is replayed | Durable per-node sequence validation | Full state rollback can reset anti-replay state |
-| Administrative request replay | Request ID, bounded timestamp, and replay cache | Cache is process-local and not a distributed consensus log |
+| Administrative request replay | Mutations require unique request IDs and bounded timestamps; dashboard and nodes reject stale or reused IDs | Caches are process-local, not a distributed consensus log; durable policy sequence checks independently reject old policies |
 | Unauthorized dashboard mutation | Separate server-validated admin/operator credentials; role headers are ignored | Token theft remains a local administrative compromise |
 | Quarantined node approves policy | Sensitive policy application rejects non-trusted nodes | Application isolation is not network isolation |
 | Protected file tampering | Snapshot digest comparison and forensic evidence | A node-host attacker can modify local state and keys |
 | Invalid recovery artifact | Signed metadata, identity binding, digest, and post-write verification | Key compromise defeats signature assurance |
-| Audit deletion or reordering | Hash-linked signed records plus state witness | Local deletion is only tamper-evident; external retention is required for immutability |
+| Audit deletion or reordering | Hash-linked signed records plus state witness; sanitized exports carry an independently verifiable signed projection | Local deletion is only tamper-evident; external retention is required for immutability, and exported public keys require separate identity pinning |
 | Node outage | Dashboard reports offline state and returns partial-operation failure | No automatic quorum failover or cross-node consensus is implemented |
 | Credential leakage | Ignored runtime secrets, redacted audit exports, no secret metrics | Environment and host protections remain necessary |
+| Malicious or prompt-injected audit values | Analyst uses only independently verified, bounded event projections; event values are explicitly treated as untrusted; output citations are checked against event IDs | Model interpretation can still be wrong; this is advisory and must not authorize operations |
+| Model credential exposure or external evidence disclosure | API key remains server-side; API requests require admin auth, replay protection, and a dedicated rate limit; only sanitized audit events/status are sent | Model provider receives operational evidence; deployment operators must assess data-handling terms, account controls, and incident sensitivity |
 | Container breakout | Non-root user, dropped capabilities, read-only filesystems, no-new-privileges | Host or kernel compromise remains out of scope |
 
 ## Residual risks and non-claims
 
 This project does not implement mTLS, certificate rotation, HSM-backed keys, external immutable logging, firewall-enforced quarantine, Prometheus exposition, automated alert delivery, or production-grade multi-node consensus. Hash chaining provides tamper evidence, not automatic immutability. A successful test run is not a production-readiness claim.
+
+The Meta Model API analyst is not a source of truth. It cannot prove attribution or intent, and a schema-valid response may still be inaccurate. Provider timeout, missing credentials, and other errors are surfaced as deterministic fallback statuses; no live API access is assumed by the test suite.

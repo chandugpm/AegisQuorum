@@ -22,6 +22,7 @@ test('request security validates timestamp and replay identity', () => {
     assert.deepEqual(requestSecurity({ headers: { 'x-request-id': 'request-123', 'x-request-timestamp': '1000000' } }, cache), { checked: true, id: 'request-123', timestamp: 1000000 });
     assert.throws(() => requestSecurity({ headers: { 'x-request-id': 'request-123', 'x-request-timestamp': '1000000' } }, cache), /replayed-request/);
     assert.throws(() => requestSecurity({ headers: { 'x-request-id': 'request-456', 'x-request-timestamp': '1' } }, cache), /stale-request/);
+    assert.throws(() => requestSecurity({ headers: {} }, cache, { required: true }), /replay-protection-required/);
   } finally { Date.now = originalNow; }
 });
 

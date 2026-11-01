@@ -66,6 +66,9 @@ test('dashboard reports sanitized live state and executes the authenticated real
   assert.ok(page.body.includes('id="integrityRing"') && page.body.includes('id="safetyRing"'));
   assert.ok(page.body.includes('id="mttdRingValue">14ms') && page.body.includes('id="mttrRingValue">42ms'));
   assert.ok(page.body.includes('id="demoAutoAuth"'));
+  assert.ok(page.body.includes('id="metaHolo"'));
+  assert.ok(page.body.includes('▶ RUN AUTONOMOUS DEMO'));
+  assert.ok(page.body.includes('@keyframes grid-flow') && page.body.includes('@keyframes mesh-flow'));
 
   const deniedPolicy = await requestJson(`${f.base}/api/policy`, { method: 'POST', body: { payload: { enforcement: 'observe-only' } } });
   const deniedDemo = await requestJson(`${f.base}/api/demo`, { method: 'POST', body: {} });

@@ -60,6 +60,65 @@
     @media(max-width:1050px){.ring-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:520px){.ring-card{gap:7px;padding:8px}.ring-visual{width:52px;height:52px}.ring-copy strong{font-size:8px}.ring-copy small{font-size:8px}.topology{height:240px}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+    :root{--bg:#030508;--surface:rgba(13,17,23,.65);--line:rgba(56,189,248,.15);--mono:"JetBrains Mono","Fira Code",Consolas,monospace;--sans:"JetBrains Mono","Fira Code",Consolas,monospace}
+    body{background-color:#030508}
+    .shell{position:relative;isolation:isolate;max-width:1840px;padding-top:22px}
+    .shell::before{content:"";position:fixed;inset:-4%;z-index:-1;pointer-events:none;opacity:.34;background-image:radial-gradient(1.5px 1.5px at 7% 21%,rgba(226,247,255,.75),transparent 80%),radial-gradient(1px 1px at 21% 73%,rgba(6,182,212,.7),transparent 80%),radial-gradient(1.5px 1.5px at 44% 34%,rgba(255,255,255,.65),transparent 80%),radial-gradient(1px 1px at 68% 63%,rgba(139,92,246,.72),transparent 80%),radial-gradient(1px 1px at 89% 19%,rgba(255,255,255,.62),transparent 80%);background-size:520px 430px;animation:dust-drift 54s linear infinite}
+    .shell::after{content:"";position:fixed;left:-15%;right:-15%;top:52%;height:78vh;z-index:-1;pointer-events:none;opacity:.2;transform:perspective(520px) rotateX(62deg);transform-origin:center top;background-image:linear-gradient(rgba(6,182,212,.17) 1px,transparent 1px),linear-gradient(90deg,rgba(6,182,212,.14) 1px,transparent 1px);background-size:56px 44px;mask-image:linear-gradient(to bottom,transparent,black 18%,transparent 94%);animation:grid-flow 30s linear infinite}
+    .glass,.card,.metric,.audit-dock,.storyboard,.ring-card{background:rgba(13,17,23,.65)!important;border:1px solid rgba(56,189,248,.15);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);box-shadow:0 20px 70px rgba(0,0,0,.4),inset 0 1px rgba(255,255,255,.025)}
+    .card,.metric,.audit-dock,.storyboard,.ring-card{transition:border-color .24s ease,box-shadow .24s ease,transform .24s ease}
+    .card:hover,.metric:hover,.audit-dock:hover,.storyboard:hover,.ring-card:hover{border-color:rgba(255,255,255,.44);box-shadow:0 20px 72px rgba(0,0,0,.42),inset 0 1px rgba(255,255,255,.28),0 0 26px rgba(56,189,248,.13)}
+    .brand h1,.story-head h2,.dock-head h2{color:#f4f9ff;text-shadow:0 0 18px rgba(6,182,212,.32),0 0 34px rgba(139,92,246,.13)}
+    .hologram{color:#c4b5fd;border-color:rgba(139,92,246,.45);background:linear-gradient(100deg,rgba(139,92,246,.12),rgba(6,182,212,.1));box-shadow:inset 0 0 18px rgba(139,92,246,.07),0 0 18px rgba(139,92,246,.12);animation:holo-breathe 3s ease-in-out infinite}
+    .hologram::before{background:var(--violet)}
+    .workspace-grid{grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:14px}
+    #meshStudio{grid-column:1/-1;overflow:hidden;padding:18px;background:radial-gradient(ellipse at 50% 45%,rgba(6,182,212,.055),transparent 50%),rgba(13,17,23,.65)!important}
+    #meshStudio .topology-wrap{min-height:clamp(340px,34vw,520px);border-color:rgba(56,189,248,.2);background:radial-gradient(ellipse at 50% 50%,rgba(6,182,212,.1),transparent 42%),linear-gradient(180deg,rgba(3,8,15,.72),rgba(3,5,8,.92));box-shadow:inset 0 0 65px rgba(6,182,212,.045)}
+    #meshStudio .topology{height:clamp(340px,34vw,520px);filter:drop-shadow(0 0 14px rgba(6,182,212,.14))}
+    .data-pipe{stroke:rgba(16,185,129,.65);stroke-width:1.6;stroke-dasharray:3 10;animation:mesh-flow 2.5s linear infinite}
+    .data-pipe.shield-path{stroke:rgba(6,182,212,.9);stroke-width:2;stroke-dasharray:3 12;filter:drop-shadow(0 0 5px rgba(6,182,212,.75))}
+    .link{stroke:rgba(90,123,151,.37);stroke-width:1.5;stroke-dasharray:2 8}
+    .packet{filter:drop-shadow(0 0 7px #10b981)}
+    .node-circle{filter:drop-shadow(0 0 9px rgba(16,185,129,.6));animation:node-breathe 3.1s ease-in-out infinite}
+    #circleB{animation-delay:.7s}#circleC{animation-delay:1.4s}
+    .node-title{font-size:13px;fill:#f0f8ff;filter:drop-shadow(0 0 5px rgba(6,182,212,.42))}
+    .node-sub{font-size:10px}
+    #meshStudio.is-decoy #circleA{animation:node-breathe .8s ease-in-out infinite,signal-glitch 1.8s steps(2) infinite;stroke:var(--red)}
+    #meshStudio.is-decoy .trap-ring{stroke:var(--amber);stroke-width:2}
+    #meshStudio.is-gossip .shield-path{animation:mesh-flow .75s linear infinite}
+    .decoy-hud{font-size:10px;letter-spacing:.07em}
+    .shield-hex{stroke-width:2;stroke-dasharray:6 3}
+    .ring-card{box-shadow:inset 0 1px rgba(255,255,255,.04),0 12px 42px rgba(0,0,0,.34)}
+    .ring-progress{filter:drop-shadow(0 0 7px currentColor)}
+    .storyboard{position:relative;overflow:hidden;border-color:rgba(6,182,212,.24)}
+    .storyboard::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:linear-gradient(90deg,transparent,rgba(6,182,212,.85),rgba(139,92,246,.7),transparent);opacity:.72}
+    .story-head h2{text-transform:uppercase;letter-spacing:.08em}
+    .story{position:relative;grid-template-columns:repeat(7,minmax(125px,1fr));gap:8px;padding:4px 2px 8px}
+    .story button{position:relative;overflow:hidden;min-height:74px;border-color:rgba(56,189,248,.17);background:linear-gradient(145deg,rgba(13,17,23,.82),rgba(5,8,13,.83));transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease}
+    .story button:hover{transform:translateY(-3px);box-shadow:inset 0 1px rgba(255,255,255,.18),0 0 20px rgba(6,182,212,.16)}
+    .story button.active{border-color:rgba(6,182,212,.82);box-shadow:0 0 22px rgba(6,182,212,.2),inset 0 -2px var(--cyan)}
+    .story button.active::after{content:"";position:absolute;left:-25%;right:75%;bottom:0;height:2px;background:#a5f3fc;box-shadow:0 0 12px #06b6d4;animation:timeline-laser 1.4s ease-in-out infinite alternate}
+    #runFull{min-width:245px;padding:12px 18px;border:1px solid rgba(16,185,129,.62);background:linear-gradient(100deg,rgba(16,185,129,.2),rgba(6,182,212,.15));color:#d1fae5;font:700 11px var(--mono);letter-spacing:.06em;text-shadow:0 0 12px rgba(16,185,129,.45);box-shadow:0 0 24px rgba(16,185,129,.12),inset 0 1px rgba(255,255,255,.15);animation:demo-pulse 2.8s ease-in-out infinite}
+    #runFull:hover{box-shadow:0 0 34px rgba(16,185,129,.32),inset 0 1px rgba(255,255,255,.25)}
+    .card h2{text-shadow:0 0 12px rgba(6,182,212,.16)}
+    .forensic-screen{border-color:rgba(6,182,212,.34);box-shadow:inset 0 0 30px rgba(6,182,212,.09),0 0 22px rgba(6,182,212,.06);background:#02060a}
+    .forensic-screen::before{content:"";position:absolute;z-index:1;inset:0;pointer-events:none;opacity:.2;background:repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(0,0,0,.48) 4px);mix-blend-mode:multiply}
+    .forensic-screen canvas{filter:contrast(1.12) saturate(.9)}
+    .forensic-screen.scanning{box-shadow:inset 0 0 48px rgba(6,182,212,.15),0 0 26px rgba(6,182,212,.22)}
+    .scanline{z-index:3;height:3px;background:#67e8f9;box-shadow:0 0 22px #06b6d4,0 0 42px rgba(6,182,212,.72)}
+    .mask-layer{z-index:2}
+    .redaction-mask{background:repeating-linear-gradient(135deg,rgba(244,63,94,.42) 0 3px,rgba(15,5,11,.83) 3px 6px);backdrop-filter:blur(5px) contrast(1.4);box-shadow:0 0 18px rgba(244,63,94,.36)}
+    .redaction-mask span{font-size:clamp(6px,.65vw,9px);text-shadow:0 0 8px rgba(244,63,94,.8)}
+    .node-circle.quarantined{animation:node-breathe .7s ease-in-out infinite,signal-glitch 1.8s steps(2) infinite}
+    .badge.good{box-shadow:0 0 14px rgba(16,185,129,.14)}
+    button:active{transform:translateY(1px) scale(.985);box-shadow:inset 0 0 18px rgba(255,255,255,.12),0 0 18px rgba(6,182,212,.18)}
+    @keyframes mesh-flow{to{stroke-dashoffset:-52}}@keyframes node-breathe{0%,100%{transform:scale(.97);opacity:.85}50%{transform:scale(1.07);opacity:1}}@keyframes signal-glitch{0%,92%,100%{translate:0 0}93%{translate:-2px 1px}95%{translate:2px -1px}}@keyframes timeline-laser{to{left:76%;right:5%}}@keyframes demo-pulse{0%,100%{box-shadow:0 0 20px rgba(16,185,129,.1),inset 0 1px rgba(255,255,255,.12)}50%{box-shadow:0 0 34px rgba(16,185,129,.28),inset 0 1px rgba(255,255,255,.2)}}@keyframes holo-breathe{50%{box-shadow:inset 0 0 24px rgba(139,92,246,.16),0 0 25px rgba(6,182,212,.18)}}@keyframes dust-drift{to{background-position:180px -100px,-80px 130px,110px 180px,-140px -60px,220px 90px}}@keyframes grid-flow{to{background-position:0 176px,0 176px}}
+    @media(max-width:1100px){.workspace-grid{grid-template-columns:1fr 1fr}#meshStudio{grid-column:1/-1}.ring-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:760px){.workspace-grid{grid-template-columns:1fr}#meshStudio,#policyStudio,#forensicsStudio{grid-column:1/-1}#meshStudio .topology,#meshStudio .topology-wrap{height:330px;min-height:330px}.story{grid-template-columns:repeat(7,145px)}#runFull{min-width:0;width:100%}.story-actions{width:100%}.header-status{justify-content:flex-start}.hologram{order:5}}
+    body::after{content:"";position:fixed;left:-18%;right:-18%;top:44%;height:90vh;z-index:0;pointer-events:none;opacity:.34;transform:perspective(680px) rotateX(62deg);transform-origin:center top;background-image:linear-gradient(rgba(6,182,212,.24) 1px,transparent 1px),linear-gradient(90deg,rgba(6,182,212,.2) 1px,transparent 1px);background-size:72px 56px;mask-image:linear-gradient(to bottom,transparent 0,black 16%,black 68%,transparent 100%);animation:grid-flow 30s linear infinite}
+    .shell{z-index:1}
+    .shell::before{z-index:0;opacity:.2}
+    @media(prefers-reduced-motion:reduce){body::before,body::after,.shell::before,.shell::after,#runFull,.story button.active::after,.hologram{animation:none!important}}
   </style>
 </head>
 <body>
@@ -72,6 +131,7 @@
     <div class="header-status">
       <span class="badge good" id="roleBadge">READ-ONLY</span>
       <span class="badge warn" id="providerBadge">DETERMINISTIC FALLBACK</span>
+      <span class="badge hologram" id="metaHolo">META AI · MUSE SPARK 1.3 + SAM 3.1 · FALLBACK</span>
       <div class="top-actions">
         <button class="demo-auth compact" id="demoAutoAuth" title="Creates a short-lived HttpOnly local development session; the admin token is never returned">1-Click Load Dev Admin Token</button>
         <button class="manifest-button compact" id="manifestOpen">Rule-4 Inspector</button>
@@ -114,7 +174,7 @@
   </section>
 
   <section class="storyboard" aria-labelledby="storyTitle">
-    <div class="story-head"><div><h2 id="storyTitle">One-click judge storyboard</h2><p>Seven stages · mutations require the configured role and fresh replay headers.</p></div><div class="story-actions"><button id="runFull" class="runall">Run full 7-step sequence</button><button id="runDemo" class="compact">Legacy flow</button></div></div>
+    <div class="story-head"><div><h2 id="storyTitle">Cinematic response timeline</h2><p>Seven stages · authenticated mutations carry fresh replay headers.</p></div><div class="story-actions"><button id="runFull" class="runall">▶ RUN AUTONOMOUS DEMO</button><button id="runDemo" class="compact">Legacy flow</button></div></div>
     <div class="story">
       <button data-step="tamper"><b>⚡ 01 · TAMPER</b>Inject tamper · Node-A</button>
       <button data-step="deception"><b>🦎 02 · CHAMELEON</b>Probe synthetic decoy</button>
@@ -261,6 +321,8 @@
     const live = providerMode !== 'Deterministic Fallback';
     $('#providerBadge').textContent = providerMode.toUpperCase();
     $('#providerBadge').className = `badge ${live ? 'live' : 'warn'}`;
+    $('#metaHolo').textContent = `${live ? 'POWERED BY META MODEL API' : 'META AI FALLBACK'} · MUSE SPARK 1.3 + SAM 3.1`;
+    $('#metaHolo').className = `badge hologram ${live ? 'live' : 'warn'}`;
     $('#modelStatus').textContent = providerMode;
     $('#modelStatus').className = `badge ${live ? 'live' : 'warn'}`;
     document.querySelectorAll('[data-model]').forEach(pill => {

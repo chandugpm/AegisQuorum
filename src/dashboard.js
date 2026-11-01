@@ -459,10 +459,11 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
       }
       if (route === '/api/gossip/broadcast') {
         const allStatuses = await statuses();
-        const sourceName = typeof input.sourceNode === 'string' ? input.sourceNode : allStatuses.find(node => node.quarantined)?.name;
+        const deceptionActive = node => Boolean(node?.quarantined) || node?.decoyState === 'DECOY_HONEYPOT';
+        const sourceName = typeof input.sourceNode === 'string' ? input.sourceNode : allStatuses.find(deceptionActive)?.name;
         if (typeof sourceName !== 'string' || !/^node-[a-c]$/.test(sourceName)) return json(response, 409, { error: 'quarantined-source-node-required' });
         const sourceIndex = sourceName.charCodeAt(sourceName.length - 1) - 97;
-        if (sourceIndex >= nodeUrls.length || !allStatuses[sourceIndex]?.quarantined) return json(response, 409, { error: 'source-node-not-quarantined' });
+        if (sourceIndex >= nodeUrls.length || !deceptionActive(allStatuses[sourceIndex])) return json(response, 409, { error: 'source-node-not-quarantined' });
         const source = await requestJson(`${nodeUrls[sourceIndex]}/threat-antibody`, 'GET', undefined, serviceToken).catch(() => ({ status: 503, body: {} }));
         if (source.status !== 200) return json(response, 503, { error: 'threat-antibody-unavailable' });
         const deliveries = await Promise.all(nodeUrls.map(async (nodeUrl, index) => {

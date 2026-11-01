@@ -90,7 +90,7 @@ function startNode({ directory, name, authorityFile, port, host = '127.0.0.1', s
       if (route === '/policy') result = node.applyPolicy(payload.update, payload.approvals);
       else if (route === '/scan') {
         result = node.scanIntegrity();
-        if (result.quarantined) result.gossipDeliveries = await broadcastAntibody();
+        if (result.quarantined && node.state.decoyState === 'DECOY_HONEYPOT') result.gossipDeliveries = await broadcastAntibody();
       }
       else if (route === '/rollback') result = node.rollback(payload.snapshotId);
       else if (route === '/simulate-tamper') result = node.simulateTamper();

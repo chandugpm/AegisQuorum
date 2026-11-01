@@ -637,7 +637,7 @@ class SecurityNode {
     this.state.lastThreatMetrics = threatMetrics;
     const evidence = { detectedAt: this.clock(), expected: checked.snapshot.digest, actual, ...threatMetrics, source: this.paths.protected };
     writeJsonAtomic(path.join(this.paths.quarantine, `${Date.now()}-tamper-evidence.json`), evidence);
-    this.state.quarantined = true; this.state.mode = 'quarantined'; this.state.decoyState = 'DECOY_HONEYPOT'; this.saveState();
+    this.state.decoyState = 'DECOY_HONEYPOT'; this.state.quarantined = true; this.state.mode = 'quarantined'; this.saveState();
     this.appendAudit('tamper-detected', evidence); this.appendAudit('quarantine-applied', { simulated: true, actual });
     this.appendThreatFingerprint({
       kind: 'threat-fingerprint', fingerprintId: crypto.randomUUID(),
@@ -719,7 +719,8 @@ class SecurityNode {
     return { inoculated: true, posture: this.state.shieldState, receipt: { ...receipt, signature: sign(this.identity.privateKey, stable(receipt)), publicKey: this.identity.publicKey } };
   }
   threatAntibody() {
-    if (!this.state.antibodyPacket || !this.state.quarantined) throw new Error('threat-antibody-unavailable');
+    const deceptionActive = this.state.quarantined || this.state.decoyState === 'DECOY_HONEYPOT';
+    if (!this.state.antibodyPacket || !deceptionActive) throw new Error('threat-antibody-unavailable');
     return { packet: this.state.antibodyPacket, sourcePublicKey: this.identity.publicKey };
   }
   executeDryRunSandbox(candidatePolicy) {

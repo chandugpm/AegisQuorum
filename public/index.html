@@ -979,7 +979,10 @@
   async function runFullSequence() {
     if (!adminToken && !devSessionActive) throw new Error('Unlock the administrator role or activate the local demo session before running the full response sequence.');
     const steps = ['tamper', 'deception', 'gossip', 'forensics', 'synthesize', 'quorum', 'rollback'];
-    for (const step of steps) await runStep(step);
+    for (const step of steps) {
+      if (step === 'gossip') await new Promise(resolve => setTimeout(resolve, 100));
+      await runStep(step);
+    }
     statusMessage('Seven stages completed. Passkey quorum remains human-approved; no biometric approval was automated.');
   }
   function speak(text) {

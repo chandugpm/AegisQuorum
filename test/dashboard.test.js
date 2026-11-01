@@ -289,6 +289,22 @@ test('deception, deterministic sandbox, gossip, visual privacy, and six-pillar a
   assert.ok(audit.body.nodes[1].events.some(event => event.type === 'gossip-inoculated'));
 });
 
+test('gossip broadcast accepts antibodies from a decoy-active source node', async t => {
+  const f = await fixture(t);
+  f.nodes[0].node.simulateTamper();
+  f.nodes[0].node.scanIntegrity();
+  f.nodes[0].node.state.quarantined = false;
+  f.nodes[0].node.saveState();
+  assert.equal(f.nodes[0].node.status().decoyState, 'DECOY_HONEYPOT');
+  const gossip = await requestJson(`${f.base}/api/gossip/broadcast`, {
+    method: 'POST', headers: { 'x-dashboard-admin-token': adminToken }, body: { sourceNode: 'node-a' }
+  });
+  assert.equal(gossip.status, 200);
+  assert.equal(gossip.body.deliveries.filter(item => item.inoculated).length, 2);
+  assert.equal(f.nodes[1].node.status().shieldState, 'INOCULATED_SHIELD');
+  assert.equal(f.nodes[2].node.status().shieldState, 'INOCULATED_SHIELD');
+});
+
 test('360 audit and hackathon manifest expose six dimensions and separate scaffold from new work', async t => {
   const f = await fixture(t);
   const audit = await requestJson(`${f.base}/api/audit/360`);

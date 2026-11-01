@@ -110,3 +110,13 @@ test('AntibodyGenerator signs the requested packet shape with Ed25519', t => {
   assert.equal(helperPacket.timestamp, 654321);
   assert.equal(verifyThreatAntibody(helperPacket, f.node.identity.publicKey), true);
 });
+
+test('threat antibody stays available to gossip while the source node is decoy-active', t => {
+  const f = fixture(); t.after(() => fs.rmSync(f.root, { recursive: true, force: true }));
+  f.node.simulateTamper();
+  f.node.scanIntegrity();
+  f.node.state.quarantined = false;
+  assert.equal(f.node.status().decoyState, 'DECOY_HONEYPOT');
+  const antibody = f.node.threatAntibody();
+  assert.equal(verifyThreatAntibody(antibody.packet, antibody.sourcePublicKey), true);
+});

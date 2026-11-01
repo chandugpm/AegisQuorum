@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { announceAdminToken, initializeAuthorityTrust, resolveRuntimeTokens } = require('../src/runtime-config');
+const { announceAdminToken, initializeAuthorityTrust, loadEnvironmentFile, resolveRuntimeTokens } = require('../src/runtime-config');
 const { readJson, writeJsonAtomic } = require('../src/core');
 const { createNodeEnvironment, resolveDashboardPort } = require('../src/launch-local');
 
@@ -40,6 +40,21 @@ test('development generates persisted strong tokens only when environment tokens
   assert.match(result.serviceToken, /^[A-Za-z0-9_-]{32,}$/);
   assert.equal(fs.readFileSync(path.join(root, 'secrets', 'dashboard-admin.token'), 'utf8').trim(), result.adminToken);
   assert.equal(fs.readFileSync(path.join(root, 'secrets', 'node-service.token'), 'utf8').trim(), result.serviceToken);
+});
+
+test('dotenv file populates missing model keys without overriding real environment variables', t => {
+  const root = temporaryRoot(t);
+  const envFile = path.join(root, '.env');
+  const secretValue = 'x'.repeat(48);
+  fs.writeFileSync(envFile, `# comment\nMODEL_API_KEY=${secretValue}\nMETA_MODEL_ID=muse-spark-1.3\nBASETEN_API_KEY=   \nINVALID LINE\n`);
+  const environment = { BASETEN_API_KEY: 'b'.repeat(48) };
+  const result = loadEnvironmentFile({ filename: envFile, environment });
+  assert.equal(result.loaded, true);
+  assert.equal(environment.MODEL_API_KEY, secretValue);
+  assert.equal(environment.META_MODEL_ID, 'muse-spark-1.3');
+  assert.equal(environment.BASETEN_API_KEY, 'b'.repeat(48), 'real environment must win over the file');
+  assert.equal(JSON.stringify(result).includes(secretValue), false);
+  assert.deepEqual(loadEnvironmentFile({ filename: path.join(root, 'missing.env'), environment: {} }), { loaded: false, entries: 0 });
 });
 
 test('production ignores persisted development tokens and fails closed when either required token is missing or weak', t => {

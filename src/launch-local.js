@@ -1,7 +1,7 @@
 const path = require('node:path');
 const { fork } = require('node:child_process');
 const { startDashboard } = require('./dashboard');
-const { announceAdminToken, initializeAuthorityTrust, resolveRuntimeTokens } = require('./runtime-config');
+const { announceAdminToken, initializeAuthorityTrust, loadEnvironmentFile, resolveRuntimeTokens } = require('./runtime-config');
 
 function resolveDashboardPort(environment) {
   const port = Number(environment.PORT || 7000);
@@ -16,6 +16,7 @@ function createNodeEnvironment(environment, overrides) {
 }
 
 function launchLocal({ environment = process.env, logger = console } = {}) {
+  loadEnvironmentFile({ environment });
   const root = environment.RUNTIME_DIRECTORY || path.join(process.cwd(), '.runtime');
   const authorityDirectory = path.join(root, 'authorities'); const trustFile = path.join(root, 'authority-trust.json');
   const { serviceToken, adminToken } = resolveRuntimeTokens({ environment, root });

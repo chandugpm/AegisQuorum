@@ -72,8 +72,22 @@ function initializeAuthorityTrust({ authorityDirectory, trustFile, environment =
   return { authorities, trust: persistedTrust, initialized: false };
 }
 
+function loadEnvironmentFile({ filename = path.join(process.cwd(), '.env'), environment = process.env } = {}) {
+  if (!fs.existsSync(filename)) return { loaded: false, entries: 0 };
+  let entries = 0;
+  for (const line of fs.readFileSync(filename, 'utf8').split(/\r?\n/)) {
+    const match = line.match(/^\s*([A-Z][A-Z0-9_]{1,64})\s*=\s*(.*?)\s*$/);
+    if (!match) continue;
+    const [, name, rawValue] = match;
+    if (environment[name] !== undefined) continue;
+    environment[name] = rawValue.replace(/^(['"])(.*)\1$/, '$2');
+    entries++;
+  }
+  return { loaded: true, entries };
+}
+
 function announceAdminToken({ environment = process.env, adminToken, logger = console }) {
   if (!isProduction(environment) && adminToken) logger.log('Local development dashboard administrator token is configured; value withheld.');
 }
 
-module.exports = { MINIMUM_TOKEN_LENGTH, validToken, resolveRuntimeTokens, initializeAuthorityTrust, announceAdminToken, isProduction };
+module.exports = { MINIMUM_TOKEN_LENGTH, validToken, resolveRuntimeTokens, loadEnvironmentFile, initializeAuthorityTrust, announceAdminToken, isProduction };

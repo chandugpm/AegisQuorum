@@ -2,6 +2,17 @@
 
 A local three-node security management MVP built with Node.js. It demonstrates signed policy updates, threshold approvals, integrity monitoring, tamper detection, quarantine, verified rollback, audit chains, an evidence-grounded Meta Model API incident analyst, and a dashboard.
 
+## Hackathon Rule 4: New Work Only
+
+| Pre-Existing Base MVP Scaffold | Newly Engineered During Meta Hackathon (Oct 26 - Nov 4) |
+| --- | --- |
+| Three-node local security service and dashboard | Chameleon decoy honeypot, signed threat fingerprints, and model-aware synthetic responses |
+| Ed25519 2-of-3 policy approvals, SHA-256 integrity checks, signed snapshots, quarantine, and verified rollback | Evidence-grounded policy synthesis and a signed 50-event dry-run certificate |
+| Replay-protected operations and independently verifiable sanitized audit chains | WebAuthn passkey authority enrollment and browser-based proposal approvals |
+| Deterministic incident analyst fallback and Meta API adapter | Privacy-first visual/voice forensics, verified-event correlation, peer threat gossip, inoculation receipts, and the six-dimension audit ledger |
+
+`GET /api/hackathon-manifest` returns this separation as structured JSON for a submission/demo evidence artifact. The implementation uses built-in Node.js modules only; model services are optional.
+
 ## Requirements
 
 - Node.js 20 or newer
@@ -41,7 +52,7 @@ Run the complete test suite:
 npm test
 ```
 
-The tests use temporary directories, test keys, and mocked node/model API boundaries; they do not access production runtime volumes or call the live Meta API.
+The tests use temporary directories, test keys, and mocked node/model API boundaries; they do not access production runtime volumes or call live Meta or Baseten APIs.
 
 The tests cover:
 
@@ -58,6 +69,8 @@ The tests cover:
 - Audit-only and full recovery CLI verification with external trust records, exact snapshot artifact digests, and fail-closed evidence checks
 - Runtime token handling
 - Three-node integration behavior
+- Chameleon fingerprints, signed threat antibodies/receipts, and sandbox proof certificates
+- WebAuthn assertion/quorum verification, 360-degree audit, hackathon manifest, and Baseten provenance contracts
 
 Run the complete isolated security workflow against temporary state:
 
@@ -132,7 +145,7 @@ The value entered in the dashboard must match `DASHBOARD_ADMIN_TOKEN` configured
 
 The dashboard's **Analyze incident** action sends an authenticated, replay-protected request to `POST /api/incident-analysis`. The dashboard independently verifies each sanitized audit export, then sends only a bounded projection of verified events and sanitized node status to the Meta Model API. Raw audit proofs, filesystem paths, private keys, service credentials, and the dashboard token are not included in the model request. Event values are untrusted data; the analyst cannot authorize or execute operations. The dashboard requires an administrator token for this endpoint and applies a separate request rate limit.
 
-To enable live analysis, configure `MODEL_API_KEY` as a server-side secret and optionally set `META_MODEL_ID` (default `muse-spark-1.3`). Docker Compose reads these from `.env`; both Render manifests declare `MODEL_API_KEY` as a secret to be entered in the Render dashboard. Never put a real key in browser code, a committed file, or a client request. Without a key or when the provider is unavailable, the server returns a deterministic evidence-based fallback and reports its source/provider status in the UI. The live service status and analysis status are separate so that a provider error is not presented as live model output.
+For live Meta analysis, configure `MODEL_API_KEY` as a server-side secret and optionally set `META_MODEL_ID` (default `muse-spark-1.3`). For Baseten Open-Weights analysis and optional Chameleon/SAM/voice calls, configure `BASETEN_API_KEY`; Baseten analysis uses `muse-spark-1.3` and deception uses the hackathon model identifier `meta-models/muse-spark-open-1026`. Docker Compose reads these values from `.env`; both Render manifests declare the keys as secrets to be entered in the Render dashboard. Never put a real key in browser code, a committed file, or a client request. Without a key or when a provider/model response is unavailable or invalid, the server returns a deterministic evidence-grounded fallback. Every AI result includes `providerMode`, `modelsInvoked`, and `verifiedEventIds`; a fallback is never labeled as live output.
 
 The model service receives sanitized incident evidence outside the deployment boundary. Review Meta's current API, data handling, account, and rate-limit terms before enabling it for operational incidents. Results are advisory, nondeterministic, and not a substitute for evidence verification or operator judgment. A valid schema and evidence references do not prove the model's conclusions are correct. No live Meta API call is part of the automated tests; tests use a local mocked API boundary.
 
@@ -162,7 +175,14 @@ Each command prints one approval object. Combine the required, distinct approval
 - `GET /api/status` returns sanitized node status.
 - `GET /api/policy/proposal` creates the next unsigned proposal.
 - `GET /api/audit` returns sanitized audit evidence.
+- `GET /api/audit/360` returns the unified hash-chain, replay, snapshot, AI-boundary, deception/gossip, and compliance ledgers.
+- `GET /api/hackathon-manifest` returns the Rule-4 base-scaffold/new-work separation.
 - `GET /api/timeline` returns chronologically ordered events from independently verified sanitized audit exports, with missing-data indicators.
+- `POST /api/deception/simulate` routes a probe to a quarantined node's decoy honeypot.
+- `POST /api/policy/synthesize` creates a verified-event policy candidate and signed dry-run proof; operator or admin token required.
+- `POST /api/gossip/broadcast` distributes a signed antibody to eligible peers.
+- `POST /api/visual-forensics` accepts image/canvas evidence and optional voice/audio context; raw media is not returned.
+- `GET /api/webauthn/challenge`, `POST /api/webauthn/register`, and `POST /api/webauthn/sign` support passkey-based authority ceremonies. The prior POST challenge/registration/sign-proposal routes remain available.
 - `POST /api/incident-analysis` returns a live or deterministic evidence-referenced incident analysis.
 - `POST /api/incident-response` runs an administrator-confirmed `scan`, `verify-snapshot`, or quarantined-node `recover` action; recovery only reports success after a clean post-recovery scan.
 - `POST /api/policy` submits an update with independent authority approvals.
@@ -186,6 +206,8 @@ x-dashboard-operator-token: <DASHBOARD_OPERATOR_TOKEN>
 - `POST /scan` scans protected content.
 - `POST /rollback` restores the current trusted snapshot.
 - `POST /simulate-tamper` modifies protected content for demonstration purposes.
+- `POST /deception-probe` records a signed honeypot fingerprint on a quarantined node.
+- `POST /gossip/inoculate` verifies a threat antibody and returns a signed peer receipt.
 
 Administrative node requests require:
 

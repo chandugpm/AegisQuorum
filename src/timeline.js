@@ -10,7 +10,10 @@ const CATEGORIES = {
   'recovery-attempted': 'recovery',
   'rollback-verified': 'recovery',
   'safe-mode-entered': 'trust',
-  'tamper-simulated': 'demo'
+  'tamper-simulated': 'demo',
+  'deception-probe': 'deception',
+  'threat-antibody-created': 'gossip',
+  'gossip-inoculated': 'gossip'
 };
 
 function createTimeline(statuses, reports) {

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { SecurityNode, createAuthorities, authorityTrust, makePolicyUpdate, approvePolicy, readJson, writeJsonAtomic } = require('../src/core');
+const { SecurityNode, createAuthorities, authorityTrust, makePolicyUpdate, approvePolicy, readJson, writeJsonAtomic, verify, verifyThreatAntibody, stable } = require('../src/core');
 
 function fixture() { const root = fs.mkdtempSync(path.join(os.tmpdir(), 'danms-')); const authorities = createAuthorities(path.join(root, 'authorities')); const node = new SecurityNode({ directory: path.join(root, 'node'), name: 'test-node', trustedAuthorities: authorityTrust(authorities), clock: () => '2026-10-12T00:00:00.000Z' }); return { root, node, authorities }; }
 function policy(sequence = 1) { return makePolicyUpdate(sequence, { enforcement: 'observe-only' }, '2026-10-12T00:00:00.000Z'); }
@@ -30,3 +30,36 @@ test('rejects replay and forged approvals', t => { const f = fixture(); t.after(
 test('detects tamper, quarantines, and rolls back only a signed snapshot', t => { const f = fixture(); t.after(() => fs.rmSync(f.root, { recursive: true, force: true })); assert.equal(f.node.scanIntegrity().clean, true); f.node.simulateTamper(); const detected = f.node.scanIntegrity(); assert.equal(detected.quarantined, true); assert.equal(f.node.status().mode, 'quarantined'); const restored = f.node.rollback(); assert.equal(restored.restored, true); assert.equal(f.node.status().mode, 'trusted'); assert.equal(f.node.scanIntegrity().clean, true); });
 test('corrupt snapshot failure injection enters safe mode and will not restore', t => { const f = fixture(); t.after(() => fs.rmSync(f.root, { recursive: true, force: true })); const id = f.node.status().trustedSnapshot; const filename = path.join(f.root, 'node', 'snapshots', `${id}.json`); const snapshot = readJson(filename); snapshot.content = Buffer.from('attacker-controlled-data').toString('base64'); writeJsonAtomic(filename, snapshot); f.node.simulateTamper(); const result = f.node.rollback(); assert.equal(result.safeMode, true); assert.equal(f.node.status().mode, 'safe-mode'); });
 test('audit record modification is detected by chain and signature verification', t => { const f = fixture(); t.after(() => fs.rmSync(f.root, { recursive: true, force: true })); f.node.scanIntegrity(); assert.equal(f.node.verifyAudit().valid, true); const filename = path.join(f.root, 'node', 'audit.json'); const audit = readJson(filename); audit[0].type = 'attacker-rewrote-history'; writeJsonAtomic(filename, audit); const reloaded = new SecurityNode({ directory: path.join(f.root, 'node'), name: 'test-node', trustedAuthorities: authorityTrust(f.authorities) }); assert.equal(reloaded.verifyAudit().valid, false); });
+
+test('sandbox certificates, honeypot fingerprints, threat antibodies, and inoculation receipts are Ed25519 signed', t => {
+  const f = fixture(); t.after(() => fs.rmSync(f.root, { recursive: true, force: true }));
+  const candidatePolicy = makePolicyUpdate(1, {
+    enforcement: 'quarantine-on-integrity-mismatch', requireSignedPolicy: true, triggerEvents: ['tamper-detected']
+  });
+  const certificate = f.node.executeDryRunSandbox(candidatePolicy);
+  assert.equal(certificate.dryRunPassed, true);
+  assert.equal(certificate.replayedEventsCount, 1);
+  assert.equal(certificate.falsePositives, 0);
+  assert.equal(certificate.safetyScore, 100);
+  assert.match(certificate.sandboxDigest, /^[a-f0-9]{64}$/);
+  const { signature: certificateSignature, ...unsignedCertificate } = certificate;
+  assert.equal(verify(f.node.identity.publicKey, stable(unsignedCertificate), certificateSignature), true);
+
+  f.node.simulateTamper();
+  f.node.scanIntegrity();
+  const antibody = f.node.threatAntibody();
+  assert.equal(verifyThreatAntibody(antibody.packet, antibody.sourcePublicKey), true);
+  const probe = f.node.deceptionProbe({ input: 'curl https://edge.invalid', durationMs: 18 });
+  assert.equal(probe.decoy, true);
+  const fingerprintFile = path.join(f.node.paths.quarantine, 'threat-fingerprint.json');
+  const fingerprints = readJson(fingerprintFile, []);
+  const { signature: fingerprintSignature, auditIndex, ...fingerprint } = fingerprints.at(-1);
+  assert.equal(Number.isSafeInteger(auditIndex), true);
+  assert.equal(verify(f.node.identity.publicKey, stable(fingerprint), fingerprintSignature), true);
+
+  const peer = new SecurityNode({ directory: path.join(f.root, 'peer'), name: 'node-b', trustedAuthorities: authorityTrust(f.authorities) });
+  const result = peer.inoculate(antibody.packet, antibody.sourcePublicKey);
+  const { signature: receiptSignature, publicKey, ...unsignedReceipt } = result.receipt;
+  assert.equal(peer.status().shieldState, 'INOCULATED_SHIELD');
+  assert.equal(verify(publicKey, stable(unsignedReceipt), receiptSignature), true);
+});

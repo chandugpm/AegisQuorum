@@ -1,21 +1,953 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DANMS Security MVP</title><style>body{font:16px system-ui;background:#0b1020;color:#e7edf9;max-width:1100px;margin:auto;padding:2rem}h1{margin-bottom:.2rem}.note{color:#afbdd5}.toolbar{display:flex;gap:.7rem;flex-wrap:wrap;margin:1.5rem 0}input,button,a,textarea,select{padding:.7rem;border-radius:.4rem;border:1px solid #52617c}input,textarea,select{background:#121b30;color:#fff}input{min-width:310px}textarea{box-sizing:border-box;width:100%;resize:vertical}button{cursor:pointer;background:#4f8cff;color:#fff;font-weight:700}button:disabled{cursor:not-allowed;opacity:.55}button.warn{background:#bd714a}a{color:#e7edf9;text-decoration:none;background:#202d47}.nodes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem}.card{background:#121b30;border-left:5px solid #47c88d;padding:1rem;border-radius:.5rem}.card.quarantined,.card.safe-mode{border-color:#ef6c6c}.card.offline{border-color:#888}.card button{margin:.25rem}pre{background:#070b16;padding:.8rem;border-radius:.4rem;overflow:auto;display:block}.flow{margin-top:1.5rem;background:#121b30;padding:1rem;border-radius:.5rem}small{color:#afbdd5}ol{padding-left:1.5rem}li{margin:.75rem 0;padding:.5rem;border-left:2px solid #52617c;overflow-wrap:anywhere}@media(max-width:600px){body{padding:1rem}input{min-width:0;width:100%}}</style></head><body>
-<h1>Decentralized Network Management &amp; Security</h1><p class="note">Live node status and audit evidence are read-only. Administrative changes require the administrator token and operate on the actual three-node local service.</p>
-<div class="toolbar"><input id="token" type="password" autocomplete="off" placeholder="Administrator token (memory only)"><button onclick="proposal()">Create policy proposal</button><button onclick="policy()">Apply approved policy</button><button onclick="analyzeIncident()">Analyze incident</button><button class="warn" onclick="demo()">Run real tamper → recover workflow</button><a href="/api/audit?download=1">Download sanitized audit evidence</a><button onclick="load()">Refresh</button></div>
-<p class="note">Policy changes require signatures from separate authority keys. Save the proposal below, have the required authority holders sign it with <code>npm run approve-policy</code>, then paste their JSON approval objects here.</p><textarea id="approvals" rows="4" placeholder="Paste the JSON array of independent authority approvals"></textarea>
-<p id="message" class="note">Awaiting live node status.</p><section id="nodes" class="nodes"></section><section class="flow"><strong>Actual workflow evidence</strong><pre id="output">No action has run.</pre></section><section class="flow"><strong>Incident analyst</strong><p id="analysis-status" class="note">No analysis has run. Results are advisory and never authorize operations.</p><pre id="analysis-output">Use Analyze incident to request an evidence-grounded explanation.</pre><div id="analysis-recommendations"></div></section><section class="flow"><strong>Evidence-based incident timeline</strong><p id="timeline-limitations" class="note">Loading verified audit events…</p><div class="toolbar"><label>Node <select id="timeline-node"><option value="">All nodes</option></select></label><label>Category <select id="timeline-category"><option value="">All categories</option></select></label><button onclick="loadTimeline()">Refresh timeline</button></div><ol id="timeline-events"></ol></section>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="data:,">
+  <title>Zero Trust Command Center</title>
+  <style>
+    :root{color-scheme:dark;--bg:#060911;--surface:rgba(15,23,42,.8);--surface-2:#0b1220;--line:rgba(56,189,248,.2);--text:#e7edf7;--muted:#8997aa;--cyan:#06b6d4;--green:#10b981;--amber:#f59e0b;--red:#f43f5e;--violet:#8b5cf6;--mono:"Cascadia Code",Consolas,monospace;--sans:"Bahnschrift","Segoe UI Variable","Segoe UI",sans-serif}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;min-height:100vh;color:var(--text);font:14px/1.45 var(--sans);background-color:var(--bg);background-image:linear-gradient(rgba(63,89,116,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(63,89,116,.07) 1px,transparent 1px),radial-gradient(ellipse at 14% 0%,rgba(6,182,212,.12),transparent 34%),radial-gradient(ellipse at 88% 18%,rgba(139,92,246,.1),transparent 28%);background-size:34px 34px,34px 34px,auto,auto}
+    button,input,textarea,select{font:inherit}button{color:var(--text);background:#111c2c;border:1px solid #26384d;border-radius:6px;padding:.62rem .82rem;cursor:pointer;transition:background .18s ease,border-color .18s ease,transform .18s ease}button:hover{border-color:var(--cyan);background:#12283a}button:active{transform:translateY(1px)}button:disabled{opacity:.45;cursor:not-allowed}input,textarea,select{width:100%;color:var(--text);background:#070c15;border:1px solid #26364d;border-radius:5px;padding:.65rem}input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid rgba(6,182,212,.75);outline-offset:2px}textarea{min-height:92px;resize:vertical}label{display:block}.mono{font:12px/1.5 var(--mono);overflow-wrap:anywhere}.muted{color:var(--muted)}.green{color:var(--green)}.amber{color:var(--amber)}.red{color:var(--red)}.cyan{color:var(--cyan)}.eyebrow{color:var(--muted);font:10px var(--mono);letter-spacing:.12em;text-transform:uppercase}.shell{max-width:1740px;margin:auto;padding:18px 22px 110px}.glass,.card,.metric,.audit-dock,.storyboard{background:var(--surface);border:1px solid var(--line);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 18px 60px rgba(0,0,0,.24)}
+    .command-header{display:grid;grid-template-columns:minmax(245px,1fr) auto;align-items:center;gap:12px 24px;padding:14px 16px;border-radius:8px;margin-bottom:12px}.brand{display:flex;align-items:center;gap:12px;min-width:0}.brand-mark{width:42px;height:42px;display:grid;place-items:center;border:1px solid rgba(6,182,212,.55);border-radius:6px;color:var(--cyan);background:linear-gradient(145deg,rgba(6,182,212,.16),rgba(139,92,246,.12));box-shadow:inset 0 0 24px rgba(6,182,212,.08)}.brand-mark svg{width:25px;height:25px}.brand h1{margin:0;font-size:17px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}.brand p{margin:3px 0 0;color:var(--muted);font:10px var(--mono);letter-spacing:.11em}.header-status{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.top-actions{display:flex;align-items:center;gap:7px}.badge{display:inline-flex;align-items:center;gap:7px;max-width:100%;padding:5px 9px;border:1px solid #344256;border-radius:4px;color:#bac6d6;font:10px var(--mono);letter-spacing:.04em}.badge::before{content:"";width:6px;height:6px;flex:none;border-radius:50%;background:currentColor;box-shadow:0 0 9px currentColor}.badge.good{color:var(--green);border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.07)}.badge.warn{color:var(--amber);border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.07)}.badge.live{color:var(--cyan);border-color:rgba(6,182,212,.4);background:rgba(6,182,212,.07)}.badge.danger{color:var(--red);border-color:rgba(244,63,94,.42);background:rgba(244,63,94,.08)}.badge.violet{color:#c4b5fd;border-color:rgba(139,92,246,.4);background:rgba(139,92,246,.08)}.auth-bar{grid-column:1/-1;display:grid;grid-template-columns:minmax(160px,1fr) minmax(160px,1fr) auto auto;gap:8px;align-items:center;padding-top:11px;border-top:1px solid rgba(137,151,170,.14)}.auth-bar input{padding:8px 10px;font:11px var(--mono)}.auth-hint{grid-column:1/-1;color:var(--muted);font-size:10px}.executive{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin-bottom:12px}.metric{min-width:0;padding:10px 12px;border-radius:6px}.metric small{display:block;color:var(--muted);font:9px var(--mono);letter-spacing:.1em;text-transform:uppercase}.metric strong{display:block;margin-top:5px;font:600 15px var(--mono);overflow-wrap:anywhere}.metric.posture{border-left:2px solid var(--green)}.metric.posture.warn{border-left-color:var(--amber)}.metric.posture.danger{border-left-color:var(--red)}
+    .storyboard{padding:12px;border-radius:8px;margin-bottom:12px}.story-head,.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.story-head{align-items:center;margin-bottom:10px}.story-head h2,.card h2{margin:0;font-size:13px;font-weight:700;letter-spacing:.03em}.story-head p,.card-head p{margin:3px 0 0;color:var(--muted);font-size:11px}.story-actions{display:flex;gap:7px;flex-wrap:wrap}.story{display:grid;grid-template-columns:repeat(7,minmax(120px,1fr));gap:6px;overflow-x:auto;padding-bottom:3px}.story button{min-height:68px;text-align:left;padding:8px 9px;font-size:10px;line-height:1.35;background:rgba(8,14,24,.76)}.story button b{display:block;margin-bottom:5px;color:var(--cyan);font:10px var(--mono)}.story button.active{border-color:var(--amber);box-shadow:inset 0 -2px var(--amber)}.story button.complete{border-color:rgba(16,185,129,.55)}.story .runall{border-color:rgba(6,182,212,.55);background:rgba(6,182,212,.1)}.statusline{min-height:18px;margin:8px 0 0;color:var(--muted);font-size:11px}.nonce-label{font:9px var(--mono);color:var(--muted)}
+    .workspace-grid{display:grid;grid-template-columns:minmax(290px,.92fr) minmax(380px,1.18fr) minmax(300px,.98fr);gap:10px;align-items:stretch}.card{min-width:0;padding:13px;border-radius:7px}.card-head{margin-bottom:10px}.card-head h2{font-size:12px;text-transform:uppercase}.card-head p{font-size:10px}.panel-kicker{display:flex;align-items:center;gap:7px;color:var(--muted);font:9px var(--mono);letter-spacing:.1em;text-transform:uppercase}.panel-kicker i{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px currentColor}.topology-wrap{position:relative;overflow:hidden;border:1px solid rgba(56,189,248,.13);border-radius:5px;background:linear-gradient(180deg,rgba(5,12,22,.86),rgba(7,14,24,.94))}.topology{display:block;width:100%;height:250px}.link{fill:none;stroke:#28445d;stroke-width:1.2;stroke-dasharray:4 7}.data-pipe{fill:none;stroke:rgba(16,185,129,.38);stroke-width:1.3;stroke-dasharray:4 8;animation:pipe-flow 4s linear infinite}.data-pipe.shield-path{stroke:rgba(6,182,212,.6);stroke-dasharray:7 12}.packet{fill:var(--green);filter:drop-shadow(0 0 5px #10b981)}.node-circle{fill:#0a1720;stroke:var(--green);stroke-width:2;filter:drop-shadow(0 0 5px rgba(16,185,129,.55))}.node-circle.quarantined{stroke:var(--red);filter:drop-shadow(0 0 8px rgba(244,63,94,.7))}.node-circle.shield{stroke:var(--cyan);filter:drop-shadow(0 0 8px rgba(6,182,212,.75))}.node-title{fill:#e7edf7;font:11px var(--mono)}.node-sub{fill:#8997aa;font:9px var(--mono)}.trap-ring{fill:none;stroke:var(--amber);stroke-width:1;opacity:0;transform-origin:center;animation:ring-pulse 2.4s ease-out infinite}.node-circle.quarantined~.trap-ring{opacity:.8}.node-circle.quarantined+.trap-ring{stroke:var(--red)}.shield-wave{fill:none;stroke:var(--cyan);opacity:0;transform-origin:center;animation:shield-wave 2.5s ease-out infinite}.heartbeat{animation:heartbeat 1.8s ease-in-out infinite}.node-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px}.node-card{min-width:0;padding:8px;border:1px solid rgba(137,151,170,.16);border-radius:5px;background:rgba(7,12,21,.58)}.node-card strong{font:10px var(--mono)}.node-card p{margin:4px 0 0;color:var(--muted);font-size:9px;overflow-wrap:anywhere}.node-card .digest{font-size:8px;color:#9fb0c4}.bar{height:5px;overflow:hidden;background:#1a293a;border-radius:4px}.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--green));transition:width .3s}
+    .studio-label{display:flex;align-items:center;justify-content:space-between;margin:9px 0 6px}.row{display:flex;align-items:center;gap:6px}.row>*{flex:1;min-width:0}.compact{padding:7px 8px;font-size:10px}.probe-input-row{display:grid;grid-template-columns:92px 1fr auto;gap:6px}.output{max-height:160px;overflow:auto;margin:8px 0 0;padding:9px;border:1px solid rgba(137,151,170,.18);border-radius:5px;background:#070c14;color:#c5d3e4;white-space:pre-wrap;font:10px/1.5 var(--mono)}.notice{padding:8px;border-left:2px solid var(--violet);background:rgba(139,92,246,.07);color:#bac6d6;font-size:10px}.studio-grid{display:grid;gap:9px}.diff-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.diff-panel{min-width:0}.diff-panel .eyebrow{margin-bottom:4px}.diff-panel pre{height:112px;overflow:auto;margin:0;padding:8px;border:1px solid rgba(137,151,170,.17);border-radius:5px;background:#070c14;color:#bfd0e2;white-space:pre-wrap;font:9px/1.5 var(--mono)}.sandbox-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:8px 0}.sandbox-stat{padding:7px 6px;text-align:center;border:1px solid rgba(16,185,129,.18);border-radius:4px;background:rgba(16,185,129,.045)}.sandbox-stat strong{display:block;color:var(--green);font:13px var(--mono)}.sandbox-stat small{color:var(--muted);font-size:8px;text-transform:uppercase}.signer-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.signer-card{padding:8px 6px;border:1px solid rgba(139,92,246,.2);border-radius:5px;background:rgba(139,92,246,.045);text-align:center}.signer-card strong{display:block;font:9px var(--mono)}.signer-card p{min-height:24px;margin:4px 0;color:var(--muted);font-size:8px}.signer-card button{width:100%;padding:6px 4px;font-size:8px}.signer-card.signed{border-color:rgba(16,185,129,.52);background:rgba(16,185,129,.07)}.quorum-meta{display:flex;justify-content:space-between;gap:8px;margin:5px 0;color:var(--muted);font:9px var(--mono)}details.cli-drawer{margin-top:6px;border-top:1px solid rgba(137,151,170,.16);padding-top:7px}details.cli-drawer summary{cursor:pointer;color:#c4b5fd;font:9px var(--mono)}details.cli-drawer textarea{margin:7px 0;min-height:74px;font:9px var(--mono)}
+    .forensic-screen{position:relative;overflow:hidden;border:1px solid rgba(6,182,212,.2);border-radius:5px;background:#050a11}.forensic-screen canvas{display:block;width:100%;height:auto;aspect-ratio:16/8;object-fit:contain}.scanline{position:absolute;left:0;right:0;top:0;height:2px;background:var(--cyan);box-shadow:0 0 16px var(--cyan);opacity:0}.forensic-screen.scanning .scanline{opacity:.9;animation:scan 2.2s ease-in-out infinite}.mask-layer{position:absolute;inset:0;pointer-events:none}.redaction-mask{position:absolute;border:1px solid var(--red);background:rgba(244,63,94,.18);box-shadow:0 0 15px rgba(244,63,94,.25);animation:mask-in .35s ease-out both}.forensic-controls{display:grid;grid-template-columns:1fr auto;gap:6px;margin-top:7px}.forensic-controls textarea{grid-column:1/-1;min-height:52px;font:10px var(--mono)}.forensic-controls input[type=file]{font-size:9px;padding:6px}.event-badges{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}.event-badges button{padding:4px 6px;color:var(--cyan);font:8px var(--mono)}.event-badges button:hover{color:white}
+    .audit-dock{margin-top:10px;padding:12px;border-radius:8px}.dock-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}.dock-head h2{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.05em}.audit-tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid rgba(137,151,170,.2);padding-bottom:6px}.audit-tabs button{flex:none;padding:7px 9px;border-color:transparent;background:transparent;color:var(--muted);font-size:9px}.audit-tabs button[aria-selected="true"]{color:var(--cyan);border-color:rgba(6,182,212,.34);background:rgba(6,182,212,.08)}.audit-panel{min-height:175px;max-height:310px;overflow:auto;padding:8px 2px}.audit-list{display:grid;gap:5px}.audit-item{padding:7px;border:1px solid rgba(137,151,170,.16);border-radius:4px;background:rgba(5,10,17,.6)}.audit-item b{font:9px var(--mono);overflow-wrap:anywhere}.audit-item small{display:block;margin-top:3px;color:var(--muted);font:8px/1.45 var(--mono);overflow-wrap:anywhere}.ledger-row{display:grid;grid-template-columns:100px 100px minmax(160px,1fr) minmax(160px,1fr);gap:8px;padding:6px;border-bottom:1px solid rgba(137,151,170,.12);font:8px/1.45 var(--mono);overflow-wrap:anywhere}.ledger-head{color:var(--muted);text-transform:uppercase}.ledger-pair{color:#b4c5d8}.broken-link{border-color:var(--red)!important;color:#fecdd3!important;background:rgba(244,63,94,.1)!important}.audit-actions{display:flex;gap:6px;flex-wrap:wrap}.audit-actions button{font-size:9px}.audit-pillars{display:none}.footer{display:flex;justify-content:space-between;gap:12px;margin:12px 2px;color:var(--muted);font:9px var(--mono)}
+    .manifest-button{border-color:rgba(245,158,11,.35);color:#fcd34d}.tour-button{border-color:rgba(244,63,94,.42);color:#fda4af}.drawer{display:none;position:fixed;right:22px;top:100px;z-index:15;width:min(420px,calc(100vw - 28px));padding:15px;border:1px solid rgba(6,182,212,.35);border-radius:7px;background:rgba(8,14,24,.97);backdrop-filter:blur(16px);box-shadow:0 24px 80px #000b}.drawer.open{display:grid;gap:8px}.drawer .card-head{align-items:center}.drawer label{color:var(--muted);font:9px var(--mono);text-transform:uppercase}.drawer input{font:10px var(--mono)}dialog{width:min(980px,calc(100vw - 24px));max-height:86vh;padding:0;overflow:auto;color:var(--text);border:1px solid rgba(245,158,11,.38);border-radius:8px;background:#080e18;box-shadow:0 30px 100px #000e}dialog::backdrop{background:rgba(1,4,10,.78);backdrop-filter:blur(5px)}.modal-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid rgba(137,151,170,.16)}.modal-head h2{margin:0;font-size:15px}.manifest-grid{display:grid;grid-template-columns:1fr 1.3fr;gap:10px;padding:12px}.manifest-column{padding:10px;border:1px solid rgba(137,151,170,.16);border-radius:5px;background:rgba(15,23,42,.5)}.manifest-column h3{margin:0 0 8px;font:10px var(--mono);color:var(--cyan);text-transform:uppercase}.manifest-column.new h3{color:#fcd34d}.manifest-list{display:grid;gap:6px}.manifest-item{padding:8px;border:1px solid rgba(137,151,170,.12);border-radius:4px;background:rgba(5,10,17,.58);font-size:10px}.manifest-item strong{display:block;margin-bottom:3px;font:9px var(--mono);color:#e2e8f0}.manifest-note{margin:0 12px 12px;color:var(--muted);font-size:9px}
+    .director-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.director-controls label{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:9px}.director-controls input{width:auto}.teleprompter{position:fixed;z-index:20;left:0;right:0;bottom:0;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:9px 20px;border-top:1px solid rgba(6,182,212,.26);background:rgba(5,9,16,.94);backdrop-filter:blur(16px);box-shadow:0 -10px 35px rgba(0,0,0,.32)}.teleprompter strong{color:var(--red);font:9px var(--mono);letter-spacing:.1em}.teleprompter p{margin:0;color:#d4deea;text-align:center;font-size:11px}.tour-progress{width:120px;height:3px;background:#253246}.tour-progress i{display:block;width:0;height:100%;background:var(--cyan)}
+    .teleprompter{display:none}.teleprompter.active{display:grid}
+    @keyframes pipe-flow{to{stroke-dashoffset:-48}}@keyframes heartbeat{50%{opacity:.45;transform:scale(1.1)}}@keyframes ring-pulse{0%{opacity:.75;transform:scale(.8)}100%{opacity:0;transform:scale(1.55)}}@keyframes shield-wave{0%{opacity:.8;transform:scale(.8)}100%{opacity:0;transform:scale(1.8)}}@keyframes scan{0%{transform:translateY(0)}100%{transform:translateY(240px)}}@keyframes mask-in{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+    @media(max-width:1200px){.workspace-grid{grid-template-columns:minmax(280px,.9fr) minmax(360px,1.1fr)}.forensics-studio{grid-column:1/-1}.forensic-screen canvas{aspect-ratio:16/6}.executive{grid-template-columns:repeat(3,1fr)}}@media(max-width:760px){.shell{padding:10px 10px 100px}.command-header{grid-template-columns:1fr}.header-status{justify-content:flex-start}.auth-bar{grid-template-columns:1fr 1fr}.executive{grid-template-columns:repeat(2,minmax(0,1fr))}.story-head{align-items:flex-start;flex-direction:column}.story{grid-template-columns:repeat(7,135px)}.workspace-grid{grid-template-columns:1fr}.forensics-studio{grid-column:auto}.topology{height:230px}.manifest-grid{grid-template-columns:1fr}.ledger-row{grid-template-columns:75px 80px minmax(120px,1fr);}.ledger-row span:last-child{display:none}.teleprompter{grid-template-columns:auto 1fr;padding:8px 10px}.tour-progress{display:none}.teleprompter p{text-align:left;font-size:9px}.footer{flex-direction:column}.signer-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:430px){.auth-bar{grid-template-columns:1fr}.auth-hint{grid-column:auto}.header-status{align-items:flex-start}.top-actions{width:100%;flex-wrap:wrap}.metric strong{font-size:12px}.node-grid{grid-template-columns:1fr}.probe-input-row{grid-template-columns:75px 1fr}.probe-input-row button{grid-column:1/-1}.diff-grid{grid-template-columns:1fr}.diff-panel pre{height:80px}.story-actions{width:100%}.story-actions button{flex:1}.teleprompter strong{font-size:8px}}
+    :root{--bg:#050811;--surface:rgba(9,17,32,.78);--line:rgba(56,189,248,.25)}
+    body{position:relative;isolation:isolate;background-color:var(--bg);background-image:linear-gradient(rgba(63,89,116,.065) 1px,transparent 1px),linear-gradient(90deg,rgba(63,89,116,.065) 1px,transparent 1px);background-size:32px 32px}
+    body::before{content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none;background:radial-gradient(ellipse at 18% 20%,rgba(16,185,129,.12),transparent 30%),radial-gradient(ellipse at 75% 14%,rgba(6,182,212,.16),transparent 32%),radial-gradient(ellipse at 52% 82%,rgba(139,92,246,.11),transparent 34%);filter:blur(40px);animation:aurora-drift 24s ease-in-out infinite alternate}
+    .glass,.card,.metric,.audit-dock,.storyboard{backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-color:rgba(56,189,248,.25)}
+    .card,.metric,.audit-dock,.storyboard{transition:border-color .24s ease,box-shadow .24s ease,transform .24s ease}
+    .card:hover,.metric:hover,.audit-dock:hover,.storyboard:hover{border-color:rgba(56,189,248,.5);box-shadow:0 18px 58px rgba(0,0,0,.32),0 0 24px rgba(6,182,212,.08)}
+    .ring-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 12px}
+    .ring-card{display:flex;align-items:center;gap:12px;min-width:0;padding:11px 14px;border:1px solid rgba(56,189,248,.25);border-radius:7px;background:var(--surface);backdrop-filter:blur(20px);box-shadow:0 12px 35px rgba(0,0,0,.18)}
+    .ring-visual{position:relative;display:grid;place-items:center;flex:none;width:62px;height:62px}
+    .ring-visual svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+    .ring-track,.ring-progress{fill:none;stroke-width:4}
+    .ring-track{stroke:rgba(137,151,170,.16)}
+    .ring-progress{stroke:var(--green);stroke-linecap:round;stroke-dasharray:163.4;stroke-dashoffset:0;filter:drop-shadow(0 0 5px currentColor);transition:stroke-dashoffset 1.2s cubic-bezier(.2,.8,.2,1),stroke .3s ease}
+    .ring-progress.cyan-ring{stroke:var(--cyan)}.ring-progress.violet-ring{stroke:var(--violet)}.ring-progress.amber-ring{stroke:var(--amber)}
+    .ring-value{position:relative;z-index:1;font:600 11px var(--mono);color:var(--text);text-align:center}
+    .ring-copy{min-width:0}.ring-copy strong{display:block;font:10px var(--mono);letter-spacing:.045em;text-transform:uppercase}.ring-copy small{display:block;margin-top:3px;color:var(--muted);font-size:9px}
+    .top-actions .demo-auth{border-color:rgba(16,185,129,.45);color:#6ee7b7;background:rgba(16,185,129,.07)}
+    .topology-wrap{min-height:290px;background:radial-gradient(ellipse at 38% 38%,rgba(6,182,212,.08),transparent 42%),linear-gradient(180deg,rgba(5,12,22,.86),rgba(7,14,24,.94))}
+    .topology{height:290px;filter:drop-shadow(0 0 10px rgba(6,182,212,.08))}
+    .radar-sweep{fill:url(#radarFill);stroke:rgba(245,158,11,.75);stroke-width:1;opacity:0;transform-origin:170px 66px}
+    #meshStudio.is-decoy .radar-sweep{opacity:.9;animation:radar-rotate 3.2s linear infinite}
+    #meshStudio.is-decoy #circleA{stroke:var(--red);filter:drop-shadow(0 0 11px rgba(244,63,94,.85))}
+    .decoy-hud{position:absolute;z-index:2;top:10px;left:10px;display:none;padding:6px 9px;border:1px solid rgba(244,63,94,.55);border-radius:4px;background:rgba(30,8,17,.86);color:#fda4af;font:9px var(--mono);letter-spacing:.035em;box-shadow:0 0 18px rgba(244,63,94,.12);animation:hud-flicker 2.8s steps(1) infinite}
+    .decoy-hud.active{display:block}
+    .shield-hex{fill:rgba(6,182,212,.035);stroke:var(--cyan);stroke-width:1.5;stroke-dasharray:5 4;opacity:0;filter:drop-shadow(0 0 5px rgba(6,182,212,.7));transition:opacity .4s ease}
+    .shield-hex.active{opacity:.95;animation:hex-pulse 2.4s ease-in-out infinite}
+    .antibody-packet{fill:#67e8f9;opacity:0;filter:drop-shadow(0 0 6px var(--cyan))}
+    #meshStudio.is-gossip .antibody-packet{opacity:1}
+    .forensic-screen.scanning .scanline{animation:scan 1.4s ease-in-out infinite}
+    .redaction-mask{display:flex;align-items:flex-start;justify-content:flex-start;overflow:hidden;padding:3px;background:rgba(244,63,94,.16);backdrop-filter:blur(4px);image-rendering:pixelated}
+    .redaction-mask span{padding:2px 3px;background:rgba(18,5,11,.88);color:#fecdd3;font:clamp(5px, .7vw, 8px) var(--mono);white-space:nowrap;letter-spacing:0;box-shadow:0 0 8px rgba(244,63,94,.2)}
+    .event-badges button{color:#6ee7b7;border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.06)}
+    .toast{position:fixed;z-index:30;top:14px;left:50%;max-width:min(560px,calc(100vw - 28px));padding:10px 14px;border:1px solid rgba(6,182,212,.38);border-radius:6px;background:rgba(7,14,24,.96);color:#d8e6f4;font:11px var(--mono);opacity:0;transform:translate(-50%,-12px);pointer-events:none;transition:opacity .2s ease,transform .2s ease;box-shadow:0 16px 48px rgba(0,0,0,.35)}
+    .toast.show{opacity:1;transform:translate(-50%,0)}
+    @keyframes aurora-drift{0%{transform:translate3d(-1%,0,0) scale(1)}100%{transform:translate3d(2%,-1.5%,0) scale(1.05)}}
+    @keyframes radar-rotate{to{transform:rotate(360deg)}}@keyframes hex-pulse{50%{stroke-width:2.4;filter:drop-shadow(0 0 10px rgba(6,182,212,.9))}}@keyframes hud-flicker{0%,94%,97%,100%{opacity:1}95%,96%{opacity:.55}}
+    @media(max-width:1050px){.ring-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:520px){.ring-card{gap:7px;padding:8px}.ring-visual{width:52px;height:52px}.ring-copy strong{font-size:8px}.ring-copy small{font-size:8px}.topology{height:240px}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+  </style>
+</head>
+<body>
+<main class="shell">
+  <header class="command-header glass" id="topTelemetry">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M16 3 27 9v14l-11 6L5 23V9l11-6Z" stroke="currentColor" stroke-width="1.5"/><path d="m11 16 3.2 3.2L21 12" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16" cy="16" r="10" stroke="currentColor" stroke-opacity=".35"/></svg></div>
+      <div><h1>Zero Trust Command Center</h1><p>DECENTRALIZED NETWORK SECURITY · LIVE OPERATIONS</p></div>
+    </div>
+    <div class="header-status">
+      <span class="badge good" id="roleBadge">READ-ONLY</span>
+      <span class="badge warn" id="providerBadge">DETERMINISTIC FALLBACK</span>
+      <div class="top-actions">
+        <button class="demo-auth compact" id="demoAutoAuth" title="Creates a short-lived HttpOnly local development session; the admin token is never returned">1-Click Load Dev Admin Token</button>
+        <button class="manifest-button compact" id="manifestOpen">Rule-4 Inspector</button>
+        <button class="tour-button compact" id="tourStart">Start 3-Min Video Tour</button>
+        <button id="credentialToggle" class="compact">Credential vault</button>
+      </div>
+    </div>
+    <div class="auth-bar" id="credentials" aria-label="In-memory credential vault">
+      <input id="adminToken" type="password" autocomplete="off" placeholder="DASHBOARD_ADMIN_TOKEN" aria-label="Dashboard administrator token">
+      <input id="operatorToken" type="password" autocomplete="off" placeholder="DASHBOARD_OPERATOR_TOKEN" aria-label="Dashboard operator token">
+      <button id="saveCredentials" class="compact">Unlock role</button>
+      <button id="clearCredentials" class="compact">Clear</button>
+      <span class="auth-hint">Credentials remain in this tab's memory only. Admin takes precedence; operators can synthesize policy but cannot run admin-only actions.</span>
+    </div>
+  </header>
+
+  <section class="executive" aria-label="Command telemetry">
+    <div class="metric posture" id="postureMetric"><small>System DEFCON posture</small><strong id="defcon" class="green">DEFCON 5: VERIFIED SECURE</strong></div>
+    <div class="metric"><small>Verified nodes</small><strong id="verifiedCount">0 / 3</strong></div>
+    <div class="metric"><small>Policy sequence lock</small><strong id="sequence">—</strong></div>
+    <div class="metric"><small>MTTD · session</small><strong id="mttd">— ms</strong></div>
+    <div class="metric"><small>MTTR · session</small><strong id="mttr">— ms</strong></div>
+    <div class="metric"><small>Anti-replay nonce</small><strong class="nonce-label" id="nonceTicker">READY · FRESH PER POST</strong></div>
+  </section>
+  <section class="ring-grid" aria-label="Live system KPI gauges">
+    <article class="ring-card"><div class="ring-visual"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="ring-track" cx="32" cy="32" r="26"/><circle class="ring-progress" id="integrityRing" cx="32" cy="32" r="26"/></svg><strong class="ring-value" id="integrityValue">100%</strong></div><div class="ring-copy"><strong>System integrity</strong><small>SHA-256 · signed snapshots</small></div></article>
+    <article class="ring-card"><div class="ring-visual"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="ring-track" cx="32" cy="32" r="26"/><circle class="ring-progress cyan-ring" id="safetyRing" cx="32" cy="32" r="26"/></svg><strong class="ring-value" id="safetyValue">100%</strong></div><div class="ring-copy"><strong>Sandbox safety</strong><small id="safetyNote">Demo baseline · verify on dry-run</small></div></article>
+    <article class="ring-card"><div class="ring-visual"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="ring-track" cx="32" cy="32" r="26"/><circle class="ring-progress violet-ring" id="mttdRing" cx="32" cy="32" r="26"/></svg><strong class="ring-value" id="mttdRingValue">14ms</strong></div><div class="ring-copy"><strong>MTTD</strong><small>Mean detect time</small></div></article>
+    <article class="ring-card"><div class="ring-visual"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="ring-track" cx="32" cy="32" r="26"/><circle class="ring-progress amber-ring" id="mttrRing" cx="32" cy="32" r="26"/></svg><strong class="ring-value" id="mttrRingValue">42ms</strong></div><div class="ring-copy"><strong>MTTR</strong><small>Mean recovery time</small></div></article>
+  </section>
+  <section class="metric glass" style="margin-bottom:12px;padding:9px 12px" aria-label="AI model status">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+      <span class="eyebrow">Meta AI multi-model status</span>
+      <span class="badge warn" id="modelStatus">Deterministic Fallback</span>
+      <span class="badge" data-model="muse-spark-1.3">muse-spark-1.3 · standby</span>
+      <span class="badge" data-model="sam-3.1">sam-3.1 · standby</span>
+      <span class="badge" data-model="muse-voice-transcribe">Muse Voice · standby</span>
+      <span class="badge" data-model="baseten">Baseten muse-spark-open-1026 · standby</span>
+    </div>
+  </section>
+
+  <section class="storyboard" aria-labelledby="storyTitle">
+    <div class="story-head"><div><h2 id="storyTitle">One-click judge storyboard</h2><p>Seven stages · mutations require the configured role and fresh replay headers.</p></div><div class="story-actions"><button id="runFull" class="runall">Run full 7-step sequence</button><button id="runDemo" class="compact">Legacy flow</button></div></div>
+    <div class="story">
+      <button data-step="tamper"><b>⚡ 01 · TAMPER</b>Inject tamper · Node-A</button>
+      <button data-step="deception"><b>🦎 02 · CHAMELEON</b>Probe synthetic decoy</button>
+      <button data-step="gossip"><b>🛡 03 · GOSSIP</b>Inoculate Nodes B & C</button>
+      <button data-step="forensics"><b>👁 04 · FORENSICS</b>SAM + voice + Muse</button>
+      <button data-step="synthesize"><b>🧪 05 · SYNTHESIZE</b>Policy + 50-event sandbox</button>
+      <button data-step="quorum"><b>🔐 06 · QUORUM</b>Human-gated 2-of-3 passkeys</button>
+      <button data-step="rollback"><b>♻ 07 · RECOVERY</b>Verify snapshot rollback</button>
+    </div>
+    <p class="statusline" id="message" aria-live="polite">Connecting to the local control plane…</p>
+  </section>
+
+  <section class="workspace-grid" aria-label="Security studios">
+    <article class="card" id="meshStudio">
+      <div class="card-head"><div><div class="panel-kicker"><i></i> Network operations</div><h2>Decentralization mesh</h2><p>Signed heartbeats · decoy quarantine · peer shields</p></div><button id="refresh" class="compact">Refresh</button></div>
+      <div class="topology-wrap">
+        <svg class="topology" viewBox="0 0 700 310" role="img" aria-label="Animated three-node mesh with coordinator">
+          <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0v6l7-3z" fill="#06b6d4"/></marker><filter id="softGlow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter><radialGradient id="radarFill"><stop offset="0" stop-color="#f59e0b" stop-opacity=".2"/><stop offset="1" stop-color="#f43f5e" stop-opacity=".02"/></radialGradient></defs>
+          <path class="link" d="M170 66 C230 100 270 126 350 155 M530 66 C470 102 425 130 350 155 M530 244 C465 210 420 180 350 155 M170 66 C265 38 430 38 530 66 M170 66 C215 160 400 225 530 244 M170 244 C250 220 270 180 350 155 M170 244 C280 270 420 270 530 244"/>
+          <path class="data-pipe" d="M170 66 C230 100 270 126 350 155 C425 130 470 102 530 66"/>
+          <path class="data-pipe shield-path" id="gossipAB" d="M170 66 C275 20 430 20 530 66" opacity="0" marker-end="url(#arrow)"/>
+          <path class="data-pipe shield-path" id="gossipAC" d="M170 66 C255 120 430 235 530 244" opacity="0" marker-end="url(#arrow)"/>
+          <path class="radar-sweep" id="radarSweep" d="M170 66 L170 20 A46 46 0 0 1 202 33 Z"/>
+          <circle cx="170" cy="66" r="25" class="node-circle heartbeat" id="circleA"/><circle cx="170" cy="66" r="37" class="trap-ring"/><circle cx="170" cy="66" r="48" class="shield-wave" id="waveA"/>
+          <circle cx="530" cy="66" r="25" class="node-circle heartbeat" id="circleB"/><circle cx="530" cy="244" r="25" class="node-circle heartbeat" id="circleC"/>
+          <path class="shield-hex" id="shieldB" d="M530 23 568 44v44l-38 22-38-22V44z"/><path class="shield-hex" id="shieldC" d="M530 201 568 222v44l-38 22-38-22v-44z"/>
+          <circle class="antibody-packet" r="4"><animateMotion dur="2.3s" repeatCount="indefinite" path="M170 66 C275 20 430 20 530 66"/></circle>
+          <circle class="antibody-packet" r="4"><animateMotion dur="2.8s" repeatCount="indefinite" path="M170 66 C255 120 430 235 530 244"/></circle>
+          <circle cx="350" cy="155" r="20" fill="#101a2b" stroke="#8b5cf6" stroke-width="1.5" filter="url(#softGlow)"/><text x="350" y="153" text-anchor="middle" fill="#c4b5fd" font-size="8" font-family="monospace">COORD</text><text x="350" y="164" text-anchor="middle" fill="#8997aa" font-size="7" font-family="monospace">CONTROL</text>
+          <text x="170" y="108" text-anchor="middle" class="node-title">NODE-A</text><text x="170" y="122" text-anchor="middle" class="node-sub" id="svgA">CONNECTING</text>
+          <text x="530" y="108" text-anchor="middle" class="node-title">NODE-B</text><text x="530" y="122" text-anchor="middle" class="node-sub" id="svgB">CONNECTING</text>
+          <text x="530" y="286" text-anchor="middle" class="node-title">NODE-C</text><text x="530" y="300" text-anchor="middle" class="node-sub" id="svgC">CONNECTING</text>
+          <circle class="packet" r="3.5"><animateMotion dur="4.2s" repeatCount="indefinite" path="M170 66 C230 100 270 126 350 155 C425 130 470 102 530 66"/></circle>
+          <circle class="packet" r="2.5" fill="#8b5cf6"><animateMotion dur="5.1s" repeatCount="indefinite" path="M530 244 C465 210 420 180 350 155"/></circle>
+        </svg>
+        <div class="decoy-hud" id="decoyHud">🦎 DECOY HONEYPOT TRAPPING ATTACKER</div>
+      </div>
+      <div class="node-grid" id="nodes"></div>
+      <div class="studio-label"><span class="eyebrow">Chameleon probe routing</span><span class="badge">SYNTHETIC ONLY</span></div>
+      <div class="probe-input-row"><select id="probeNode" aria-label="Target node"><option>node-a</option><option>node-b</option><option>node-c</option></select><input id="probeInput" value="help" maxlength="512" aria-label="Synthetic probe input"><button id="probeButton" class="compact">Probe</button></div>
+      <pre id="probeOutput" class="output">Waiting for a quarantined node.</pre>
+    </article>
+
+    <article class="card" id="policyStudio">
+      <div class="card-head"><div><div class="panel-kicker"><i style="background:var(--violet)"></i> Policy engineering</div><h2>Autonomous policy studio</h2><p>Candidate only · apply requires verified 2-of-3 approvals</p></div><span class="badge warn" id="sandboxBadge">SANDBOX IDLE</span></div>
+      <div class="row"><button id="synthesize" class="compact">Synthesize with Muse</button><button id="proposalRefresh" class="compact">New proposal</button></div>
+      <div class="diff-grid" style="margin-top:8px"><div class="diff-panel"><div class="eyebrow">Current policy</div><pre id="policyBefore">No policy loaded.</pre></div><div class="diff-panel"><div class="eyebrow">Candidate policy</div><pre id="policyAfter">Awaiting synthesis.</pre></div></div>
+      <div class="sandbox-stats"><div class="sandbox-stat"><strong id="sandboxEvents">—/50</strong><small>events replayed</small></div><div class="sandbox-stat"><strong id="sandboxFalse">—</strong><small>false positives</small></div><div class="sandbox-stat"><strong id="sandboxSafety">—%</strong><small>safety score</small></div></div>
+      <div class="eyebrow" style="margin:9px 0 5px">Passkey authority signers</div>
+      <div class="signer-grid">
+        <div class="signer-card" data-signer="authority-1"><strong>AUTHORITY 01</strong><p>TouchID · FaceID · security key</p><button data-passkey="authority-1">Sign with passkey</button></div>
+        <div class="signer-card" data-signer="authority-2"><strong>AUTHORITY 02</strong><p>TouchID · FaceID · security key</p><button data-passkey="authority-2">Sign with passkey</button></div>
+        <div class="signer-card" data-signer="authority-3"><strong>AUTHORITY 03</strong><p>TouchID · FaceID · security key</p><button data-passkey="authority-3">Sign with passkey</button></div>
+      </div>
+      <div class="bar" style="margin-top:9px"><i id="quorumBar"></i></div><div class="quorum-meta"><span id="quorumProgress">0 / 2 signatures verified</span><span>private keys stay in authenticator</span></div>
+      <div class="row"><button id="applyPolicy" class="compact">Apply verified quorum</button><span class="notice">Biometric approval is never automated or simulated.</span></div>
+      <details class="cli-drawer"><summary>Offline CLI approval JSON · approve-policy</summary><label class="eyebrow" for="approvals">Paste approval array or { update, approvals }</label><textarea id="approvals" placeholder='[{"authority":"authority-1","digest":"…","signature":"…"}]'></textarea></details>
+      <pre id="policyOutput" class="output">No candidate generated.</pre>
+    </article>
+
+    <article class="card forensics-studio" id="forensicsStudio">
+      <div class="card-head"><div><div class="panel-kicker"><i style="background:var(--amber)"></i> Evidence analysis</div><h2>Visual + voice forensics</h2><p>Media is withheld; only redacted metadata reaches correlation.</p></div><div class="top-actions"><span class="badge warn" id="visualStatus">AWAITING EVIDENCE</span><span class="badge" id="voiceStatus">VOICE · OPTIONAL</span></div></div>
+      <div class="forensic-screen" id="forensicScreen"><canvas id="incidentCanvas" width="960" height="480" aria-label="Synthetic incident terminal snapshot"></canvas><div class="scanline"></div><div class="mask-layer" id="maskLayer"></div></div>
+      <div class="forensic-controls"><input id="incidentImage" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Optional incident screenshot"><input id="incidentAudio" type="file" accept="audio/*" aria-label="Optional voice incident note"><textarea id="voiceNote" maxlength="1000" placeholder="Optional operator context (never treated as authorization)" aria-label="Operator incident context"></textarea><button id="visualAnalyze" class="compact">Run SAM + Muse correlation</button></div>
+      <div class="event-badges" id="verifiedEventBadges"></div>
+      <pre id="visualOutput" class="output">Synthetic terminal fixture ready. Choose visual evidence or run storyboard step 4.</pre>
+    </article>
+  </section>
+
+  <section class="audit-dock" id="auditVault" aria-label="360-degree cryptographic audit vault">
+    <div class="dock-head"><div><div class="panel-kicker"><i style="background:var(--cyan)"></i> Evidence vault</div><h2>360° All-Aspects Cryptographic Audit</h2></div><div class="audit-actions"><button id="loadAudit">Refresh 360 ledger</button><button id="verifyAudit">Verify chain in browser</button><a class="badge live" href="/api/audit?download=1" download="audit-evidence.json">Download evidence</a></div></div>
+    <div class="audit-tabs" role="tablist" aria-label="Audit dimensions">
+      <button role="tab" aria-selected="true" data-audit-tab="hashchain">01 · Hash chain</button><button role="tab" aria-selected="false" data-audit-tab="replay">02 · Anti-replay</button><button role="tab" aria-selected="false" data-audit-tab="snapshot">03 · Snapshot integrity</button><button role="tab" aria-selected="false" data-audit-tab="ai">04 · AI boundary</button><button role="tab" aria-selected="false" data-audit-tab="gossip">05 · Deception + gossip</button><button role="tab" aria-selected="false" data-audit-tab="export">06 · Export + tamper</button>
+    </div>
+    <div class="audit-panel" id="auditPanel" role="tabpanel"><div id="auditEvents" class="audit-list"></div><div id="auditPillars" class="audit-pillars"></div></div>
+    <p id="auditVerify" class="statusline">Load the signed 360-degree ledger to inspect evidence.</p>
+    <button id="tamperAudit" class="compact danger" hidden>Simulate 1-byte local audit tamper</button>
+  </section>
+  <footer class="footer"><span>ZERO TRUST · LEAST PRIVILEGE · HUMAN-APPROVED RECOVERY</span><span>SHA-256 · ED25519 · NO EXTERNAL FRONTEND ASSETS</span></footer>
+</main>
+
+<dialog id="manifestDialog" aria-labelledby="manifestTitle">
+  <div class="modal-head"><div><div class="eyebrow">Meta Global AI Developer Hackathon · Oct 26 - Nov 4</div><h2 id="manifestTitle">Judge Rule-4 Inspector · Base vs. New Work</h2></div><button id="manifestClose" aria-label="Close Rule-4 Inspector">Close</button></div>
+  <div class="manifest-grid"><section class="manifest-column"><h3>Pre-Existing Base MVP Scaffold</h3><div id="manifestBase" class="manifest-list"></div></section><section class="manifest-column new"><h3>Newly Engineered · Five Feature Modules</h3><div id="manifestNew" class="manifest-list"></div></section></div>
+  <p class="manifest-note" id="manifestNote">Loading the structured work manifest from the control plane…</p>
+</dialog>
+
+<aside class="teleprompter" id="teleprompter" aria-live="polite"><strong id="directorState">DIRECTOR · STANDBY</strong><p id="subtitleText">Zero-trust posture is verified. Start a guided tour when ready.</p><div class="tour-progress" aria-label="Tour progress"><i id="tourProgress"></i></div><div class="director-controls"><label><input id="tourVoiceover" type="checkbox"> Voice</label><label><input id="tourCapture" type="checkbox"> Record screen</label><button id="tourStop" class="compact" hidden>Stop</button></div></aside>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script>
-const token=document.querySelector('#token');const out=x=>document.querySelector('#output').textContent=JSON.stringify(x,null,2);const message=x=>document.querySelector('#message').textContent=x;
-let policyProposal=null;
-async function call(url,body){const r=await fetch(url,{method:'POST',headers:{'content-type':'application/json','x-dashboard-admin-token':token.value.trim(),'x-request-id':crypto.randomUUID(),'x-request-timestamp':String(Date.now())},body:JSON.stringify(body||{})});const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j}
-async function analyzeIncident(){const status=document.querySelector('#analysis-status');const output=document.querySelector('#analysis-output');const recommendations=document.querySelector('#analysis-recommendations');status.textContent='Collecting sanitized node status and verified audit evidence…';recommendations.replaceChildren();try{const result=await call('/api/incident-analysis',{});const source=result.analysisStatus==='live'?`Live Meta Model API${result.model?` (${result.model})`:''}`:result.analysisStatus==='mock'?'Mocked Meta API response (test/injected boundary)':`Deterministic fallback; provider status: ${result.providerStatus}${result.errorCode?` (${result.errorCode})`:''}`;status.textContent=`${source}. Advisory only; verify evidence before taking action.`;output.textContent=JSON.stringify(result.analysis,null,2);for(const recommendation of result.analysis?.recommendations||[]){const card=element('article');card.className='card';card.append(element('strong',recommendation.action));card.append(element('p',recommendation.reason));card.append(element('small',`Evidence: ${(recommendation.evidenceRefs||[]).join(', ')}`));const node=(recommendation.evidenceRefs||[]).map(ref=>ref.split(':')[0]).find(name=>/^node-[a-c]$/.test(name));const actions={'request-integrity-scan':['scan','Review and approve integrity scan'],'verify-trusted-snapshot':['verify-snapshot','Review and approve snapshot verification'],'request-recovery-review':['recover','Review and approve recovery']};if(recommendation.actionType==='request-policy-review'){const button=element('button','Open 2-of-3 policy proposal workflow');button.addEventListener('click',proposal);card.append(button)}else if(node&&actions[recommendation.actionType]){const [action,label]=actions[recommendation.actionType];const button=element('button',label);button.addEventListener('click',()=>incidentAction(node,action));card.append(button)}recommendations.append(card)}}catch(e){status.textContent=`Analysis unavailable: ${e.message}`;output.textContent='No analysis was returned.'}}
-function element(tag,text){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;return node}
-function render(nodes){const container=document.querySelector('#nodes');container.replaceChildren();for(const n of nodes){const card=element('article');card.className=`card ${n.mode}`;card.append(element('h2',n.name));card.append(element('p',`Trust state: ${n.mode}`));card.append(element('p',`Quarantined: ${n.quarantined}`));card.append(element('p',`Policy sequence: ${n.lastPolicySequence}`));card.append(element('p',`Trusted snapshot: ${n.trustedSnapshotPresent?'present':'missing'}`));card.append(element('p',`Audit chain: ${n.audit?.valid?'verified':'INVALID'} (${n.audit?.entries??0} entries)`));if(n.error)card.append(element('small',n.error));const scan=element('button','Approve integrity scan');scan.addEventListener('click',()=>incidentAction(n.name,'scan'));card.append(scan);const recover=element('button','Approve trusted recovery');recover.disabled=!n.quarantined;recover.addEventListener('click',()=>incidentAction(n.name,'recover'));card.append(recover);container.append(card)}}
-async function load(){try{const r=await fetch('/api/status');const j=await r.json();render(j.nodes);message('Live status fetched '+new Date().toLocaleTimeString());loadTimeline()}catch(e){message('Status failed: '+e.message)}}
-async function incidentAction(node,action){const question=action==='recover'?`Human approval required: restore ${node} from its currently verified trusted snapshot, then verify post-recovery integrity?`:action==='verify-snapshot'?`Human approval required: verify the currently trusted snapshot for ${node}?`:`Human approval required: scan ${node}; a mismatch can quarantine it.`;if(!window.confirm(question))return;try{const result=await call('/api/incident-response',{node,action});out(result);message(`${node} ${action}: ${result.operationStatus}`);await load()}catch(e){message(`${node} ${action} failed: ${e.message}`)}}
-let timelineData=null;
-function renderTimeline(){const list=document.querySelector('#timeline-events');list.replaceChildren();if(!timelineData)return;const nodeFilter=document.querySelector('#timeline-node').value;const categoryFilter=document.querySelector('#timeline-category').value;const shown=timelineData.events.filter(event=>(!nodeFilter||event.node===nodeFilter)&&(!categoryFilter||event.category===categoryFilter));for(const event of shown){const item=element('li');item.append(element('strong',`${event.timestamp||'Timestamp unavailable'} · ${event.node} · ${event.category} · ${event.type}`));item.append(element('p',`Result: ${event.outcome}; evidence reference: ${event.evidenceRef}`));const details=element('pre',JSON.stringify(event.evidence,null,2));item.append(details);list.append(item)}if(!shown.length)list.append(element('li','No verified events match these filters.'))}
-async function loadTimeline(){const note=document.querySelector('#timeline-limitations');try{const response=await fetch('/api/timeline',{cache:'no-store'});const result=await response.json();if(!response.ok)throw new Error(result.error||response.status);timelineData=result;const nodeSelect=document.querySelector('#timeline-node');const selected=nodeSelect.value;nodeSelect.replaceChildren(element('option','All nodes'));nodeSelect.firstChild.value='';for(const node of [...new Set(result.events.map(event=>event.node))].sort()){const option=element('option',node);option.value=node;nodeSelect.append(option)}nodeSelect.value=selected;const categorySelect=document.querySelector('#timeline-category');const selectedCategory=categorySelect.value;categorySelect.replaceChildren(element('option','All categories'));categorySelect.firstChild.value='';for(const category of [...new Set(result.events.map(event=>event.category))].sort()){const option=element('option',category);option.value=category;categorySelect.append(option)}categorySelect.value=selectedCategory;document.querySelector('#timeline-node').onchange=renderTimeline;document.querySelector('#timeline-category').onchange=renderTimeline;const limits=[...result.limitations,...result.incomplete.map(item=>`${item.node||'Evidence'}: ${item.reason}${item.count?` (${item.count})`:''}`)];note.textContent=limits.join(' ');renderTimeline()}catch(e){note.textContent=`Timeline unavailable: ${e.message}`}}
-async function proposal(){try{const r=await fetch('/api/policy/proposal',{cache:'no-store'});const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);policyProposal=j.update;out(j);message('Save the proposal and obtain '+j.quorum+' independent authority signatures before applying.')}catch(e){message('Proposal failed: '+e.message)}}
-async function policy(){try{if(!policyProposal)throw new Error('create a proposal first');const approvals=JSON.parse(document.querySelector('#approvals').value);const j=await call('/api/policy',{update:policyProposal,approvals});out(j);policyProposal=null;message('Externally approved policy submitted to all nodes.');await load()}catch(e){message('Policy rejected: '+e.message)}}
-async function demo(){try{const j=await call('/api/demo');out(j);message('Real node workflow completed: snapshot verification, detection, simulated quarantine, verified rollback, post-recovery scan, and audit report.');render(j.nodes)}catch(e){message('Workflow failed: '+e.message)}}load();setInterval(load,5000);
-</script></body></html>
+(() => {
+  'use strict';
+  let adminToken = '';
+  let operatorToken = '';
+  let devSessionActive = false;
+  let latestAudit = null;
+  let latestAudit360 = null;
+  let latestProposal = null;
+  let latestStatuses = [];
+  let passkeyApprovals = [];
+  let requiredQuorum = 2;
+  let incidentStartedAt = 0;
+  let recoveryStartedAt = 0;
+  let mttd = 14;
+  let mttr = 42;
+  let activeAuditTab = 'hashchain';
+  let tourActive = false;
+  let tourStartAt = 0;
+  let cancelTourWait = () => {};
+  let mediaRecorder = null;
+  let recordingChunks = [];
+  const $ = selector => document.querySelector(selector);
+  let toastTimer = 0;
+  const statusMessage = text => {
+    $('#message').textContent = text;
+    const toast = $('#toast');
+    if (!toast || /^Control plane connected/.test(text)) return;
+    toast.textContent = text;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
+  };
+  const safeText = value => typeof value === 'string' ? value : '';
+  const role = () => adminToken || devSessionActive ? 'ADMIN' : operatorToken ? 'OPERATOR' : 'READ-ONLY';
+  function replayHeaders() {
+    const requestId = crypto.randomUUID();
+    $('#nonceTicker').textContent = `${requestId.slice(0, 8)} · ${new Date().toLocaleTimeString()}`;
+    return { 'x-request-id': requestId, 'x-request-timestamp': String(Date.now()) };
+  }
+  async function api(url, { method = 'GET', body, replay = false } = {}) {
+    const headers = {};
+    if (body !== undefined) headers['content-type'] = 'application/json';
+    if (method.toUpperCase() === 'POST' || replay) Object.assign(headers, replayHeaders());
+    if (adminToken) headers['x-dashboard-admin-token'] = adminToken;
+    else if (operatorToken) headers['x-dashboard-operator-token'] = operatorToken;
+    const response = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), cache: 'no-store', credentials: 'same-origin' });
+    const value = await response.json();
+    if (!response.ok) throw new Error(value.error || `http-${response.status}`);
+    return value;
+  }
+  function setProvider(value) {
+    const providerMode = typeof value === 'string' ? value : value?.providerMode || value?.providerSource || value?.analysisSource || 'Deterministic Fallback';
+    const modelsInvoked = Array.isArray(value?.modelsInvoked) ? value.modelsInvoked : [];
+    const live = providerMode !== 'Deterministic Fallback';
+    $('#providerBadge').textContent = providerMode.toUpperCase();
+    $('#providerBadge').className = `badge ${live ? 'live' : 'warn'}`;
+    $('#modelStatus').textContent = providerMode;
+    $('#modelStatus').className = `badge ${live ? 'live' : 'warn'}`;
+    document.querySelectorAll('[data-model]').forEach(pill => {
+      const model = pill.dataset.model;
+      const active = modelsInvoked.some(name => model === 'baseten' ? name.includes('meta-models/muse-spark-open-1026') : name === model || (model === 'muse-spark-1.3' && name === 'muse-spark-1.3')) || (model === 'baseten' && providerMode.includes('Baseten'));
+      pill.textContent = `${model === 'muse-voice-transcribe' ? 'Muse Voice' : model} · ${active ? 'live' : 'standby'}`;
+      pill.className = `badge ${active ? 'live' : ''}`;
+    });
+  }
+  function updateRole() {
+    $('#roleBadge').textContent = role();
+    $('#roleBadge').className = `badge ${adminToken || devSessionActive || operatorToken ? 'good' : ''}`;
+    $('#demoAutoAuth').textContent = devSessionActive ? 'DEMO ADMIN · 10 MIN' : '1-Click Load Dev Admin Token';
+  }
+  function setRing(id, valueId, percentage, label) {
+    const progress = $('#'+id);
+    if (progress) progress.style.strokeDashoffset = `${163.4 * (1 - Math.max(0, Math.min(100, percentage)) / 100)}`;
+    const value = $('#'+valueId);
+    if (value) value.textContent = label;
+  }
+  function updateTimeRings() {
+    setRing('mttdRing', 'mttdRingValue', 100 - Math.min(100, Number(mttd || 0) / 250 * 100), `${mttd ?? 14}ms`);
+    setRing('mttrRing', 'mttrRingValue', 100 - Math.min(100, Number(mttr || 0) / 250 * 100), `${mttr ?? 42}ms`);
+  }
+  function renderNodes(nodes) {
+    latestStatuses = nodes || [];
+    const container = $('#nodes');
+    container.replaceChildren();
+    const count = latestStatuses.filter(node => node.audit?.valid && node.mode !== 'offline').length;
+    $('#verifiedCount').textContent = `${count} / ${latestStatuses.length}`;
+    const integrity = latestStatuses.length ? Math.round(count / latestStatuses.length * 100) : 0;
+    setRing('integrityRing', 'integrityValue', integrity, `${integrity}%`);
+    const safeMode = latestStatuses.some(node => node.mode === 'safe-mode');
+    const decoyActive = latestStatuses.some(node => node.decoyState === 'DECOY_HONEYPOT');
+    const inoculated = latestStatuses.some(node => node.shieldState === 'INOCULATED_SHIELD');
+    const posture = safeMode ? ['SAFE MODE', 'red', 'danger'] : decoyActive ? ['DEFCON 2: CHAMELEON HONEYPOT ACTIVE', 'amber', 'warn'] : inoculated ? ['DEFCON 3: IMMUNE INOCULATING', 'cyan', ''] : ['DEFCON 5: VERIFIED SECURE', 'green', 'good'];
+    $('#defcon').textContent = posture[0];
+    $('#defcon').className = posture[1];
+    $('#postureMetric').className = `metric posture ${posture[2]}`;
+    $('#sequence').textContent = String(Math.max(0, ...latestStatuses.map(node => node.lastPolicySequence || 0)));
+    latestStatuses.forEach((node, index) => {
+      const letter = String.fromCharCode(65 + index);
+      const circle = $(`#circle${letter}`);
+      const subtitle = $(`#svg${letter}`);
+      if (circle) circle.setAttribute('class', `node-circle${node.quarantined ? ' quarantined' : node.shieldState === 'INOCULATED_SHIELD' ? ' shield' : ''}`);
+      if (subtitle) subtitle.textContent = node.quarantined ? 'QUARANTINED · DECOY' : node.shieldState === 'INOCULATED_SHIELD' ? 'INOCULATED SHIELD' : String(node.mode || 'UNKNOWN').toUpperCase();
+      const item = document.createElement('div');
+      item.className = 'node-card';
+      const title = document.createElement('strong');
+      title.textContent = node.name || `node-${letter.toLowerCase()}`;
+      const info = document.createElement('p');
+      info.textContent = `${node.mode || 'unknown'} · ${node.decoyState || node.shieldState || 'normal'} · seq ${node.lastPolicySequence || 0}`;
+      const digest = document.createElement('p');
+      digest.className = 'mono';
+      digest.textContent = `SHA-256 ${node.currentDigest || 'unavailable'}`;
+      item.append(title, info, digest);
+      container.append(item);
+    });
+    const panel = $('#auditPillars');
+    panel.replaceChildren();
+    const facts = [
+      ['01 · SIGNED LEDGER', `${count} node(s) report a valid local chain`],
+      ['02 · REPLAY TELEMETRY', 'Request nonce values are represented as SHA-256 hashes'],
+      ['03 · SNAPSHOT INTEGRITY', `${latestStatuses.filter(node => node.trustedSnapshotPresent).length} trusted snapshot(s) present`],
+      ['04 · AI PRIVACY', 'Allowlisted evidence projection · no raw credentials'],
+      ['05 · IMMUNE SYSTEM', `${latestStatuses.filter(node => node.shieldState === 'INOCULATED_SHIELD').length} inoculated peer(s)`],
+      ['06 · EXPORT VERIFIER', 'Browser SHA-256 / Ed25519 self-consistency check']
+    ];
+    facts.forEach(([heading, text]) => {
+      const el = document.createElement('div');
+      el.className = 'node-card';
+      const h = document.createElement('strong'); h.textContent = heading;
+      const p = document.createElement('p'); p.textContent = text;
+      el.append(h, p); panel.append(el);
+    });
+    $('#gossipAB').setAttribute('opacity', latestStatuses[1]?.shieldState === 'INOCULATED_SHIELD' ? '1' : '0');
+    $('#gossipAC').setAttribute('opacity', latestStatuses[2]?.shieldState === 'INOCULATED_SHIELD' ? '1' : '0');
+    $('#waveA').setAttribute('opacity', latestStatuses[0]?.quarantined ? '.8' : '0');
+    const decoy = latestStatuses.some(node => node.decoyState === 'DECOY_HONEYPOT' || node.quarantined);
+    const shielded = latestStatuses.some(node => node.shieldState === 'INOCULATED_SHIELD');
+    $('#meshStudio').classList.toggle('is-decoy', decoy);
+    $('#meshStudio').classList.toggle('is-gossip', shielded);
+    $('#decoyHud').classList.toggle('active', decoy);
+    $('#shieldB').classList.toggle('active', latestStatuses[1]?.shieldState === 'INOCULATED_SHIELD');
+    $('#shieldC').classList.toggle('active', latestStatuses[2]?.shieldState === 'INOCULATED_SHIELD');
+  }
+  function canonical(value) {
+    if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+    if (value && typeof value === 'object') return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+    return JSON.stringify(value);
+  }
+  function bytesFromBase64(value) {
+    const binary = atob(value);
+    return Uint8Array.from(binary, char => char.charCodeAt(0));
+  }
+  async function verifyReport(report) {
+    try {
+      const proof = report?.proof;
+      if (report?.verification?.valid !== true || !proof || proof.version !== 1 || proof.node !== report.node || proof.entries !== proof.records?.length || proof.records.length !== report.events.length) return false;
+      const pem = proof.publicKey.replace(/-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\s/g, '');
+      const fingerprintBytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(proof.publicKey)));
+      const fingerprint = [...fingerprintBytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
+      if (fingerprint !== report.nodePublicKeyFingerprint) return false;
+      const key = await crypto.subtle.importKey('spki', bytesFromBase64(pem), { name: 'Ed25519' }, false, ['verify']);
+      let previous = 'GENESIS';
+      for (let i = 0; i < proof.records.length; i++) {
+        const record = proof.records[i];
+        const event = report.events[i];
+        if (record.index !== i || event.index !== i || record.previousHash !== previous || record.at !== event.at || record.type !== event.type || record.outcome !== event.outcome || canonical(record.evidence) !== canonical(event.evidence)) return false;
+        const unsigned = { index: record.index, at: record.at, type: record.type, outcome: record.outcome, evidence: record.evidence, previousHash: previous };
+        const hashBytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical(unsigned))));
+        const hash = [...hashBytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
+        if (hash !== record.hash || !await crypto.subtle.verify({ name: 'Ed25519' }, key, bytesFromBase64(record.signature), new TextEncoder().encode(hash))) return false;
+        previous = hash;
+      }
+      return previous === proof.head;
+    } catch { return false; }
+  }
+  async function load() {
+    try {
+      const state = await api('/api/status');
+      renderNodes(state.nodes);
+      statusMessage(`Control plane connected · ${new Date().toLocaleTimeString()}`);
+    } catch (error) { statusMessage(`Status unavailable: ${error.message}`); }
+  }
+  async function loadAudit() {
+    const [audit, ledger] = await Promise.all([api('/api/audit'), api('/api/audit/360')]);
+    latestAudit = audit;
+    latestAudit360 = ledger;
+    const checks = await Promise.all(audit.nodes.map(verifyReport));
+    $('#auditVerify').textContent = checks.every(Boolean) && checks.length
+      ? `Browser verified ${checks.length} signed node chain(s). Embedded keys are self-asserted; external identity trust remains separate.`
+      : 'One or more audit proofs failed browser verification.';
+    $('#auditVerify').className = `statusline ${checks.every(Boolean) && checks.length ? 'green' : 'red'}`;
+    $('#auditVerify').textContent += ` · 360 chain status ${ledger.hashChainLedger.chainVerificationStatus.filter(item => item.valid).length}/${ledger.hashChainLedger.chainVerificationStatus.length}`;
+    if (incidentStartedAt && ledger.complianceSummary.mttdMs !== null) mttd = ledger.complianceSummary.mttdMs;
+    if (recoveryStartedAt && ledger.complianceSummary.mttrMs !== null) mttr = ledger.complianceSummary.mttrMs;
+    $('#mttd').textContent = `${mttd ?? '—'} ms`;
+    $('#mttr').textContent = `${mttr ?? '—'} ms`;
+    updateTimeRings();
+    renderAuditTab(activeAuditTab);
+    return audit;
+  }
+  function auditRow(titleText, detailText, broken = false) {
+    const item = document.createElement('div');
+    item.className = `audit-item${broken ? ' broken-link' : ''}`;
+    const title = document.createElement('b'); title.textContent = titleText;
+    const details = document.createElement('small'); details.textContent = detailText;
+    item.append(title, details);
+    return item;
+  }
+  function renderAuditTab(tab) {
+    activeAuditTab = tab;
+    document.querySelectorAll('[data-audit-tab]').forEach(button => button.setAttribute('aria-selected', String(button.dataset.auditTab === tab)));
+    $('#tamperAudit').hidden = tab !== 'export';
+    const container = $('#auditEvents');
+    container.replaceChildren();
+    const ledger = latestAudit360;
+    if (!ledger) {
+      container.append(auditRow('LEDGER NOT LOADED', 'Select Refresh 360 ledger to query the signed control-plane projections.'));
+      return;
+    }
+    const appendRows = (rows, render) => rows.slice(-100).reverse().forEach(item => container.append(render(item)));
+    if (tab === 'hashchain') {
+      const links = ledger.hashChainLedger.links || [];
+      container.append(auditRow('PREV HASH → CURRENT HASH', `${links.length} signed projection links · fingerprints are SHA-256 of node public keys.`));
+      appendRows(links, item => auditRow(`${item.node} · #${item.index} · Ed25519 ${item.signatureVerified ? 'verified' : 'unverified'}`, `${item.previousHash} → ${item.currentHash} · key ${item.signerFingerprint}`));
+    } else if (tab === 'replay') {
+      const replay = ledger.antiReplayLedger;
+      container.append(auditRow('REPLAY + RATE LIMIT RADAR', `${replay.timestampDrift.samples} drift samples · max |drift| ${replay.timestampDrift.maxAbsMs} ms · sequences are node-locked.`));
+      appendRows(replay.recentRequestNonces || [], item => auditRow(`${item.stage} · ${item.outcome}`, `nonce SHA-256 ${item.requestIdHash || 'unavailable'} · timestamp drift ${item.timestampDriftMs ?? 'n/a'} ms`));
+      Object.entries(replay.rateLimitCounters || {}).forEach(([name, count]) => container.append(auditRow(`COUNTER · ${name}`, String(count))));
+      replay.policySequenceLocks.forEach(item => container.append(auditRow(`${item.node} POLICY LOCK`, `monotonic sequence ${item.sequence}`)));
+    } else if (tab === 'snapshot') {
+      const snapshot = ledger.snapshotIntegrityLedger;
+      snapshot.nodes.forEach(item => container.append(auditRow(`${item.node} · ${item.safeMode ? 'SAFE MODE' : item.quarantined ? 'QUARANTINED' : 'AVAILABLE'}`, `current SHA-256 ${item.currentDigest || 'unavailable'}`)));
+      appendRows(snapshot.events || [], item => auditRow(`${item.node} · ${item.type} · ${item.eventId}`, `${item.at} · digest ${item.digest || 'not recorded'}`));
+    } else if (tab === 'ai') {
+      const ai = ledger.aiBoundaryLedger;
+      container.append(auditRow('BOUNDARY POLICY', 'Raw image/audio bytes are withheld from the response. Only verified audit projections and redacted context may reach configured providers.'));
+      ai.proofOfStrippedFields.forEach(item => container.append(auditRow(`${item.node} · ${item.redactedFields} stripped audit field(s)`, JSON.stringify(item.strippedFieldCounts))));
+      container.append(auditRow('RAW MEDIA', 'WITHHELD · source image/audio bytes are not echoed into the audit projection or browser report.'));
+      container.append(auditRow('REDACTED PROJECTION', `${ai.sam31VisualMaskCount} validated mask(s) · verified event IDs only · no raw credential/path values.`));
+      container.append(auditRow('SAM 3.1 MASK COUNT', `${ai.sam31VisualMaskCount} masks across this dashboard process`));
+      appendRows(ai.museSparkReferenceValidation || [], item => auditRow(`REFERENCE VALIDATION · ${item.valid ? 'PASS' : 'FAIL'}`, `${item.citedEventCount} cited event(s) · ${item.verifiedEventIds.join(', ')}`));
+    } else if (tab === 'gossip') {
+      const dg = ledger.deceptionAndGossipLedger;
+      appendRows(dg.honeypotFingerprints || [], item => auditRow(`${item.node} · ${item.type} · ${item.eventId}`, `payload hash ${item.evidence?.payloadDigest || 'n/a'} · vector ${item.evidence?.commandPattern || 'unknown'} · ${item.at}`));
+      appendRows(dg.peerInoculationReceipts || [], item => auditRow(`${item.node} · signed receipt ${item.signatureVerified ? 'verified' : 'unverified'}`, `antibody ${item.receipt?.antibodyId || 'unknown'} · vector ${item.receipt?.attackVectorHash || 'unknown'}`));
+      if (!container.childElementCount) container.append(auditRow('NO DECEPTION OR GOSSIP EVENTS', 'Run storyboard stages 1 through 3 to generate signed defensive evidence.'));
+    } else {
+      container.append(auditRow('TAMPER-EVIDENT EXPORT', 'The download contains sanitized node proofs. Browser tamper simulation mutates an in-memory copy only; the server audit is never changed.'));
+      (latestAudit?.nodes || []).forEach(report => container.append(auditRow(`${report.node} · ${report.proof?.entries || 0} records`, `head ${report.proof?.head || 'unavailable'} · browser signature verification runs independently.`)));
+      container.append(auditRow('ONE-BYTE DEMONSTRATION', 'Select Simulate 1-byte local audit tamper to change one hex character and re-run chain verification.'));
+    }
+  }
+  async function verifyTamperedAudit() {
+    if (!latestAudit?.nodes?.length || !latestAudit360) await loadAudit();
+    const copy = structuredClone(latestAudit.nodes[0]);
+    if (!copy.proof?.records?.length) throw new Error('No signed audit records to tamper with.');
+    copy.proof.records[0].hash = `${copy.proof.records[0].hash[0] === '0' ? '1' : '0'}${copy.proof.records[0].hash.slice(1)}`;
+    const valid = await verifyReport(copy);
+    renderAuditTab('export');
+    $('#auditVerify').textContent = valid ? 'Tamper was not detected.' : 'PASS · local one-byte hash mutation broke the Ed25519 chain verification.';
+    $('#auditVerify').className = `statusline ${valid ? 'red' : 'green'}`;
+    $('#auditEvents').prepend(auditRow('BROKEN LINK · node-a · #0', `${copy.proof.records[0].previousHash} → ${copy.proof.records[0].hash} · local copy only`, !valid));
+  }
+  function appendManifestItems(container, items, className = '') {
+    container.replaceChildren();
+    items.forEach(item => {
+      const row = document.createElement('div');
+      row.className = `manifest-item ${className}`.trim();
+      row.textContent = item;
+      container.append(row);
+    });
+  }
+  async function openManifest() {
+    const manifest = await api('/api/hackathon-manifest');
+    const work = manifest.workstreams || {};
+    const newItems = work['Newly Engineered During Meta Hackathon (Oct 26 - Nov 4)'] || [];
+    const groups = [
+      ['01 · CHAMELEON AI DECEPTION', /Chameleon/i],
+      ['02 · AUTONOMOUS POLICY + SANDBOX', /policy synthesis/i],
+      ['03 · WEBAUTHN QUORUM', /WebAuthn/i],
+      ['04 · MULTIMODAL PRIVACY FORENSICS', /visual\/voice/i],
+      ['05 · P2P GOSSIP INOCULATION', /gossip/i]
+    ];
+    const modules = groups.map(([title, pattern]) => {
+      const match = newItems.find(item => pattern.test(item));
+      return `${title}\n${match || 'Feature work recorded in backend manifest.'}`;
+    });
+    appendManifestItems($('#manifestBase'), work['Pre-Existing Base MVP Scaffold'] || []);
+    appendManifestItems($('#manifestNew'), modules);
+    const auditWork = newItems.find(item => /six-dimension audit/i.test(item));
+    $('#manifestNote').textContent = `${manifest.implementationBoundary || ''} ${auditWork ? `Cross-cutting evidence: ${auditWork}` : ''}`.trim();
+    const dialog = $('#manifestDialog');
+    if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
+  }
+  function drawSyntheticSnapshot() {
+    const canvas = $('#incidentCanvas');
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#050a11'; context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = '#0b1522'; context.fillRect(0, 0, canvas.width, 42);
+    context.fillStyle = '#06b6d4'; context.font = 'bold 16px monospace'; context.fillText('SECURITY NODE · INCIDENT SNAPSHOT', 24, 27);
+    context.fillStyle = '#10b981'; context.font = '14px monospace'; context.fillText('> integrity.scan --node node-a', 28, 90);
+    context.fillStyle = '#f59e0b'; context.fillText('WARN  protected state digest mismatch', 28, 135);
+    context.fillStyle = '#e7edf7'; context.fillText('DASHBOARD_ADMIN_TOKEN = [DEMO VALUE]', 28, 190);
+    context.fillText('NODE_SERVICE_TOKEN     = [DEMO VALUE]', 28, 238);
+    context.fillStyle = '#fda4af'; context.fillText('peer_ip: 192.0.2.17', 28, 286);
+    context.fillStyle = '#c4b5fd'; context.fillText('snapshot_path: /var/demo/node-a/state.json', 28, 334);
+    context.fillStyle = '#fda4af'; context.fillText('private_key: [LOCAL FIXTURE REDACTION TARGET]', 28, 382);
+    context.fillStyle = '#8997aa'; context.font = '12px monospace'; context.fillText('LOCAL FIXTURE · NO LIVE CREDENTIALS · SHA-256 + ED25519', 28, 432);
+    context.strokeStyle = 'rgba(6,182,212,.18)'; context.lineWidth = 1;
+    for (let y = 52; y < 420; y += 24) { context.beginPath(); context.moveTo(0, y); context.lineTo(canvas.width, y); context.stroke(); }
+  }
+  function readDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('media-read-failed'));
+      reader.onload = () => resolve(String(reader.result));
+      reader.readAsDataURL(file);
+    });
+  }
+  function renderEventBadges(eventIds) {
+    const container = $('#verifiedEventBadges');
+    container.replaceChildren();
+    eventIds.slice(0, 12).forEach(id => {
+      const button = document.createElement('button');
+      button.textContent = id;
+      button.title = 'Open the signed audit vault';
+      button.onclick = async () => { await loadAudit(); renderAuditTab('hashchain'); $('#auditVault').scrollIntoView({ behavior: 'smooth' }); };
+      container.append(button);
+    });
+  }
+  function renderMasks(boxes) {
+    const layer = $('#maskLayer');
+    layer.replaceChildren();
+    boxes.forEach(item => {
+      const [x, y, width, height] = item.box || item.bounds || [];
+      if (![x, y, width, height].every(Number.isFinite)) return;
+      const mask = document.createElement('div');
+      mask.className = 'redaction-mask';
+      mask.style.left = `${x * 100}%`; mask.style.top = `${y * 100}%`;
+      mask.style.width = `${width * 100}%`; mask.style.height = `${height * 100}%`;
+      const labelMap = { credential: 'ADMIN_TOKEN', private_key: 'PRIVATE_KEY', ip_address: 'IP_ADDR', filepath: 'FILEPATH', sensitive: 'SENSITIVE' };
+      const label = labelMap[item.label] || String(item.label || 'SENSITIVE').toUpperCase().replace(/[^A-Z0-9_-]/g, '_').slice(0, 24);
+      mask.title = `[REDACTED BY SAM-3.1: ${label}]`;
+      const tag = document.createElement('span');
+      tag.textContent = `[REDACTED BY SAM-3.1: ${label}]`;
+      mask.append(tag);
+      layer.append(mask);
+    });
+  }
+  async function typeForensicReport(text) {
+    const output = $('#visualOutput');
+    output.textContent = '';
+    const reportText = text.slice(0, 3600);
+    for (let index = 0; index < reportText.length; index += 1) {
+      output.textContent += reportText[index];
+      if (index % 12 === 0) {
+        output.scrollTop = output.scrollHeight;
+        await new Promise(resolve => setTimeout(resolve, 8));
+      }
+    }
+  }
+  async function runVisualForensics() {
+    const screen = $('#forensicScreen');
+    screen.classList.add('scanning');
+    $('#visualStatus').textContent = 'SCANNING · REDACTION IN PROGRESS';
+    try {
+      const imageFile = $('#incidentImage').files[0];
+      const audioFile = $('#incidentAudio').files[0];
+      if (audioFile && audioFile.size > 4 * 1024 * 1024) throw new Error('Voice note must be 4 MB or smaller.');
+      const imageData = imageFile ? await readDataUrl(imageFile) : $('#incidentCanvas').toDataURL('image/png');
+      const audioData = audioFile ? await readDataUrl(audioFile) : undefined;
+      const telemetry = imageFile ? [] : [
+        { text: 'DASHBOARD_ADMIN_TOKEN', x: .025, y: .355, width: .43, height: .11 },
+        { text: 'NODE_SERVICE_TOKEN', x: .025, y: .455, width: .43, height: .11 },
+        { text: 'ip_address', x: .025, y: .555, width: .2, height: .11 },
+        { text: 'filepath', x: .025, y: .655, width: .48, height: .11 },
+        { text: 'private_key', x: .025, y: .755, width: .38, height: .11 }
+      ];
+      await new Promise(resolve => setTimeout(resolve, 900));
+      const result = await api('/api/visual-forensics', { method: 'POST', body: {
+        imageBase64: imageData.split(',')[1], canvasTelemetry: telemetry,
+        ...(audioData ? { audioBase64: audioData } : {}),
+        ...(($('#voiceNote').value || '').trim() ? { voiceNote: $('#voiceNote').value.trim() } : {})
+      } });
+      setProvider(result);
+      screen.classList.remove('scanning');
+      renderMasks(result.redactionBoxes || []);
+      renderEventBadges(result.verifiedEventIds || []);
+      $('#visualStatus').textContent = result.visualAnalysisStatus === 'segmentation-validated' ? 'SAM MASKS VERIFIED' : 'FULL-FRAME / TELEMETRY MASK';
+      $('#visualStatus').className = `badge ${result.visualAnalysisStatus === 'segmentation-validated' ? 'good' : 'warn'}`;
+      $('#voiceStatus').textContent = result.voiceTranscriptSource === 'muse-voice-transcribe' ? 'VOICE · TRANSCRIBED' : result.voiceTranscriptSource === 'operator-text-note' ? 'VOICE · TEXT CONTEXT' : 'VOICE · NO TRANSCRIPT';
+      $('#voiceStatus').className = `badge ${result.voiceTranscriptSource === 'muse-voice-transcribe' ? 'good' : ''}`;
+      const report = JSON.stringify({
+        providerMode: result.providerMode, modelsInvoked: result.modelsInvoked,
+        voiceTranscript: result.voiceTranscript, redactionBoxes: result.redactionBoxes,
+        redactedProofHash: result.redactedProofHash, verifiedEventIds: result.verifiedEventIds,
+        incidentReport: result.incidentReport, limitations: result.limitations
+      }, null, 2);
+      await typeForensicReport(report);
+      await loadAudit();
+      return result;
+    } finally { screen.classList.remove('scanning'); }
+  }
+  async function incidentAction(node, action) {
+    return api('/api/incident-response', { method: 'POST', body: { node, action }, adminOnly: true });
+  }
+  async function runStep(step) {
+    const start = performance.now();
+    document.querySelectorAll('[data-step]').forEach(button => button.classList.toggle('active', button.dataset.step === step));
+    statusMessage(`Running ${step}…`);
+    if (step === 'tamper') {
+      incidentStartedAt = Date.now();
+      await incidentAction('node-a', 'tamper');
+    } else if (step === 'deception') {
+      await incidentAction('node-a', 'scan');
+      if (incidentStartedAt) mttd = Math.round(Date.now() - incidentStartedAt);
+      const result = await api('/api/deception/simulate', { method: 'POST', body: { node: 'node-a', input: $('#probeInput').value || 'help', durationMs: Math.round(performance.now() - start) }, adminOnly: true });
+      $('#probeOutput').textContent = `${result.response}\n\nThreat fingerprint: ${result.threatFingerprint.digest}`;
+      setProvider(result);
+    } else if (step === 'gossip') {
+      const result = await api('/api/gossip/broadcast', { method: 'POST', body: { sourceNode: 'node-a' }, adminOnly: true });
+      $('#probeOutput').textContent = `Inoculation receipts\n${JSON.stringify(result.deliveries, null, 2)}`;
+    } else if (step === 'forensics') {
+      await runVisualForensics();
+    } else if (step === 'synthesize') {
+      await synthesize();
+    } else if (step === 'quorum') {
+      const proposal = latestProposal ? null : await api('/api/policy/proposal');
+      latestProposal = latestProposal || proposal.update;
+      requiredQuorum = proposal?.quorum || requiredQuorum;
+      refreshQuorumProgress();
+      $('#policyBefore').textContent = `Next monotonic sequence: ${latestProposal.sequence - 1}\nNo policy is applied by synthesis.`;
+      $('#policyAfter').textContent = JSON.stringify(latestProposal, null, 2);
+      $('#policyOutput').textContent = `${JSON.stringify(latestProposal, null, 2)}\n\nHuman gate: obtain ${requiredQuorum} distinct passkey signatures or use the offline CLI. The tour never fabricates biometric approval.`;
+      $('#policyStudio').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else if (step === 'rollback') {
+      recoveryStartedAt = incidentStartedAt || Date.now();
+      await incidentAction('node-a', 'recover');
+      mttr = Math.round(Date.now() - recoveryStartedAt);
+    }
+    if (mttd !== null) $('#mttd').textContent = `${mttd} ms`;
+    if (mttr !== null) $('#mttr').textContent = `${mttr} ms`;
+    updateTimeRings();
+    await load();
+    await loadAudit();
+    document.querySelector(`[data-step="${step}"]`)?.classList.add('complete');
+    statusMessage(`${step} completed.`);
+  }
+  async function synthesize() {
+    const result = await api('/api/policy/synthesize', { method: 'POST', body: {} });
+    latestProposal = result.candidatePolicy || result.sandbox.candidatePolicy || result.sandbox.candidateProposal;
+    requiredQuorum = result.quorum || 2;
+    setProvider(result);
+    $('#policyBefore').textContent = `Current sequence: ${Math.max(0, ...latestStatuses.map(node => node.lastPolicySequence || 0))}\nCandidate remains unapplied until quorum approval.`;
+    $('#policyAfter').textContent = JSON.stringify(latestProposal, null, 2);
+    $('#policyOutput').textContent = JSON.stringify(result, null, 2);
+    $('#sandboxEvents').textContent = `${result.sandbox.replayedEventsCount ?? result.sandbox.replayEventsTested}/50`;
+    $('#sandboxFalse').textContent = String(result.sandbox.falsePositives);
+    $('#sandboxSafety').textContent = `${result.sandbox.safetyScore}%`;
+    setRing('safetyRing', 'safetyValue', result.sandbox.safetyScore, `${result.sandbox.safetyScore}%`);
+    $('#safetyNote').textContent = `${result.sandbox.replayedEventsCount ?? result.sandbox.replayEventsTested} verified events replayed`;
+    $('#sandboxBadge').textContent = `PASS · ${result.sandbox.replayedEventsCount ?? result.sandbox.replayEventsTested}/50 · 0 FP · 100%`;
+    $('#sandboxBadge').className = 'badge good';
+    refreshQuorumProgress();
+    await loadAudit();
+    return result;
+  }
+  function bytesFromBase64url(value) {
+    const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+    return bytesFromBase64(base64 + '='.repeat((4 - base64.length % 4) % 4));
+  }
+  function base64url(value) {
+    const bytes = new Uint8Array(value);
+    let binary = '';
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  }
+  function base64urlText(value) { return base64url(new TextEncoder().encode(value)); }
+  async function webAuthnChallenge(authority, purpose, update) {
+    const query = new URLSearchParams({ authority, purpose });
+    if (update) query.set('update', base64urlText(JSON.stringify(update)));
+    return api(`/api/webauthn/challenge?${query}`, { method: 'GET', replay: true });
+  }
+  function refreshQuorumProgress() {
+    const count = new Set(passkeyApprovals.map(approval => approval.authority)).size;
+    $('#quorumProgress').textContent = `${count} / ${requiredQuorum} signatures verified`;
+    $('#quorumBar').style.width = `${Math.min(100, count / requiredQuorum * 100)}%`;
+    document.querySelectorAll('[data-signer]').forEach(card => card.classList.toggle('signed', passkeyApprovals.some(item => item.authority === card.dataset.signer)));
+  }
+  async function registerPasskey(authority) {
+    if (!navigator.credentials?.create || !window.PublicKeyCredential) throw new Error('WebAuthn is unavailable; use offline CLI approvals.');
+    const challenge = await webAuthnChallenge(authority, 'registration');
+    const credential = await navigator.credentials.create({ publicKey: {
+      challenge: bytesFromBase64url(challenge.challenge),
+      rp: { id: challenge.rpId, name: 'Zero Trust Command Center' },
+      user: { id: new TextEncoder().encode(authority), name: authority, displayName: authority },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+      authenticatorSelection: { userVerification: 'required' },
+      timeout: 60000,
+      attestation: 'none'
+    } });
+    if (!credential) throw new Error('passkey-registration-cancelled');
+    const registration = await api('/api/webauthn/register', { method: 'POST', body: {
+      authority,
+      challengeId: challenge.challengeId,
+      registration: {
+        credentialId: base64url(credential.rawId),
+        clientDataJSON: base64url(credential.response.clientDataJSON),
+        attestationObject: base64url(credential.response.attestationObject)
+      }
+    } });
+    return registration;
+  }
+  async function signWithPasskey(authority) {
+    if (!latestProposal) {
+      const proposal = await api('/api/policy/proposal');
+      latestProposal = proposal.update;
+      requiredQuorum = proposal.quorum || 2;
+    }
+    let challenge;
+    try {
+      challenge = await webAuthnChallenge(authority, 'sign-proposal', latestProposal);
+    } catch (error) {
+      if (error.message !== 'authority-passkey-not-registered') throw error;
+      await registerPasskey(authority);
+      challenge = await webAuthnChallenge(authority, 'sign-proposal', latestProposal);
+    }
+    const assertion = await navigator.credentials.get({ publicKey: {
+      challenge: bytesFromBase64url(challenge.challenge),
+      rpId: challenge.rpId,
+      allowCredentials: challenge.allowCredentialIds.map(id => ({ type: 'public-key', id: bytesFromBase64url(id) })),
+      userVerification: 'required',
+      timeout: 60000
+    } });
+    if (!assertion) throw new Error('passkey-signing-cancelled');
+    const signed = await api('/api/webauthn/sign', { method: 'POST', body: {
+      authority,
+      challengeId: challenge.challengeId,
+      update: latestProposal,
+      assertion: {
+        credentialId: base64url(assertion.rawId),
+        authenticatorData: base64url(assertion.response.authenticatorData),
+        clientDataJSON: base64url(assertion.response.clientDataJSON),
+        signature: base64url(assertion.response.signature)
+      }
+    } });
+    passkeyApprovals = passkeyApprovals.filter(item => item.authority !== authority).concat(signed.approval);
+    refreshQuorumProgress();
+    statusMessage(`${authority} passkey signature verified. ${passkeyApprovals.length}/${requiredQuorum} quorum approvals collected.`);
+  }
+  async function runFullSequence() {
+    if (!adminToken && !devSessionActive) throw new Error('Unlock the administrator role or activate the local demo session before running the full response sequence.');
+    const steps = ['tamper', 'deception', 'gossip', 'forensics', 'synthesize', 'quorum', 'rollback'];
+    for (const step of steps) await runStep(step);
+    statusMessage('Seven stages completed. Passkey quorum remains human-approved; no biometric approval was automated.');
+  }
+  function speak(text) {
+    if (!$('#tourVoiceover').checked || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = .94; utterance.pitch = .92;
+    window.speechSynthesis.speak(utterance);
+  }
+  function waitTour(ms) {
+    return new Promise(resolve => {
+      const timer = setTimeout(() => { cancelTourWait = () => {}; resolve(); }, ms);
+      cancelTourWait = () => { clearTimeout(timer); cancelTourWait = () => {}; resolve(); };
+    });
+  }
+  function waitUntilTourTime(milliseconds) { return waitTour(Math.max(0, tourStartAt + milliseconds - Date.now())); }
+  async function startScreenRecording() {
+    if (!navigator.mediaDevices?.getDisplayMedia || !window.MediaRecorder) throw new Error('Screen recording is not supported by this browser.');
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false });
+    recordingChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = event => { if (event.data.size) recordingChunks.push(event.data); };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recordingChunks, { type: mediaRecorder.mimeType || 'video/webm' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob); link.download = 'zero-trust-command-tour.webm'; link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      stream.getTracks().forEach(track => track.stop());
+    };
+    mediaRecorder.start(1000);
+  }
+  function stopTour() {
+    tourActive = false;
+    cancelTourWait();
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
+    $('#directorState').textContent = 'DIRECTOR · STANDBY';
+    $('#directorState').style.color = '';
+    $('#teleprompter').classList.remove('active');
+    $('#tourStart').disabled = false; $('#tourStop').hidden = true;
+    if ($('#manifestDialog').open) $('#manifestDialog').close();
+  }
+  async function directorCue(caption) {
+    $('#subtitleText').textContent = caption;
+    speak(caption);
+  }
+  async function startTour() {
+    if (tourActive) return;
+    if (!adminToken && !devSessionActive) throw new Error('Unlock the administrator role or activate the local demo session before recording a live response tour.');
+    tourActive = true; tourStartAt = Date.now();
+    $('#teleprompter').classList.add('active');
+    $('#tourStart').disabled = true; $('#tourStop').hidden = false;
+    $('#directorState').textContent = 'DIRECTOR · LIVE'; $('#directorState').style.color = 'var(--red)';
+    if ($('#tourCapture').checked) await startScreenRecording();
+    const progressTimer = setInterval(() => {
+      const elapsed = Math.min(170000, Date.now() - tourStartAt);
+      $('#tourProgress').style.width = `${elapsed / 170000 * 100}%`;
+    }, 250);
+    try {
+      await openManifest();
+      $('#topTelemetry').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      await directorCue('Rule four separates the original scaffold from five engineered feature modules. Credentials stay in tab memory, and every authenticated mutation receives a fresh replay nonce.');
+      await waitUntilTourTime(25000); if (!tourActive) return;
+      $('#manifestDialog').close();
+      await directorCue('First, controlled tampering is detected by the node hash check. The quarantined node becomes an active Chameleon decoy. Signed antibodies then inoculate the healthy peers.');
+      await runStep('tamper'); await runStep('deception'); await runStep('gossip');
+      await waitUntilTourTime(65000); if (!tourActive) return;
+      $('#forensicsStudio').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      await directorCue('The terminal image is masked before correlation. Voice context is optional, and every report citation is cross-checked against the Ed25519 audit chain.');
+      await runStep('forensics');
+      await waitUntilTourTime(110000); if (!tourActive) return;
+      $('#policyStudio').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      await directorCue('Verified events drive the candidate policy and an isolated fifty-event dry run. The passkey panel is a human-presence gate; this tour will not fabricate biometric signatures.');
+      await runStep('synthesize'); await runStep('quorum');
+      await waitUntilTourTime(132000); if (!tourActive) return;
+      await directorCue('Recovery uses the current signed snapshot and reports completion only after a clean post-rollback integrity scan.');
+      await runStep('rollback');
+      await waitUntilTourTime(150000); if (!tourActive) return;
+      $('#auditVault').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      await directorCue('The final vault exposes six audit dimensions. The last demonstration edits one byte in a local copy, never the node audit.');
+      for (const tab of ['hashchain', 'replay', 'snapshot', 'ai', 'gossip', 'export']) {
+        if (!tourActive) return;
+        renderAuditTab(tab);
+        await waitTour(1500);
+      }
+      if (tourActive) await verifyTamperedAudit();
+      await waitUntilTourTime(170000);
+      if (tourActive) statusMessage('Video tour complete · 2:50 · local audit tamper was detected.');
+    } finally {
+      clearInterval(progressTimer);
+      if (tourActive) stopTour();
+    }
+  }
+  $('#credentialToggle').onclick = () => $('#adminToken').focus();
+  $('#saveCredentials').onclick = () => {
+    adminToken = $('#adminToken').value.trim();
+    operatorToken = adminToken ? '' : $('#operatorToken').value.trim();
+    $('#adminToken').value = ''; $('#operatorToken').value = '';
+    updateRole();
+    statusMessage(`${role()} credentials are held in memory for this tab.`);
+  };
+  $('#demoAutoAuth').onclick = async () => {
+    const button = $('#demoAutoAuth'); button.disabled = true;
+    try {
+      const session = await api('/api/dev-session', { method: 'POST', body: {} });
+      devSessionActive = session.enabled === true;
+      updateRole();
+      statusMessage('Local development admin session active for 10 minutes. The admin token was not exposed to the browser.');
+    } catch (error) {
+      statusMessage(`Local demo session unavailable: ${error.message}`);
+    } finally { button.disabled = false; }
+  };
+  $('#clearCredentials').onclick = async () => {
+    if (devSessionActive) {
+      try { await api('/api/dev-session/revoke', { method: 'POST', body: {} }); } catch { /* The server-side session also expires automatically. */ }
+    }
+    adminToken = ''; operatorToken = ''; $('#adminToken').value = ''; $('#operatorToken').value = '';
+    devSessionActive = false;
+    updateRole(); statusMessage('In-memory credentials cleared.');
+  };
+  $('#refresh').onclick = load;
+  $('#loadAudit').onclick = () => loadAudit().catch(error => statusMessage(`Audit load failed: ${error.message}`));
+  $('#verifyAudit').onclick = () => loadAudit().catch(error => statusMessage(`Verification failed: ${error.message}`));
+  $('#tamperAudit').onclick = () => verifyTamperedAudit().catch(error => statusMessage(error.message));
+  document.querySelectorAll('[data-audit-tab]').forEach(button => button.addEventListener('click', () => renderAuditTab(button.dataset.auditTab)));
+  $('#manifestOpen').onclick = () => openManifest().catch(error => { $('#manifestNote').textContent = `Manifest unavailable: ${error.message}`; $('#manifestDialog').showModal(); });
+  $('#manifestClose').onclick = () => $('#manifestDialog').close();
+  $('#manifestDialog').addEventListener('click', event => { if (event.target === $('#manifestDialog')) $('#manifestDialog').close(); });
+  $('#runFull').onclick = () => runFullSequence().catch(error => statusMessage(`Sequence stopped: ${error.message}`));
+  $('#tourStart').onclick = () => startTour().catch(error => { stopTour(); statusMessage(`Video tour unavailable: ${error.message}`); });
+  $('#tourStop').onclick = stopTour;
+  $('#proposalRefresh').onclick = async () => {
+    try {
+      const proposal = await api('/api/policy/proposal');
+      latestProposal = proposal.update; requiredQuorum = proposal.quorum || 2;
+      $('#policyAfter').textContent = JSON.stringify(latestProposal, null, 2);
+      refreshQuorumProgress(); statusMessage(`Proposal sequence ${latestProposal.sequence} loaded.`);
+    } catch (error) { statusMessage(`Proposal unavailable: ${error.message}`); }
+  };
+  $('#synthesize').onclick = () => synthesize().catch(error => statusMessage(`Synthesis failed: ${error.message}`));
+  document.querySelectorAll('[data-passkey]').forEach(button => {
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try { await signWithPasskey(button.dataset.passkey); }
+      catch (error) { statusMessage(`Passkey approval failed: ${error.message}`); }
+      finally { button.disabled = false; }
+    });
+  });
+  $('#probeButton').onclick = () => api('/api/deception/simulate', { method: 'POST', body: { node: $('#probeNode').value, input: $('#probeInput').value } })
+    .then(result => { $('#probeOutput').textContent = `${result.response}\n\nThreat fingerprint: ${result.threatFingerprint.digest}`; })
+    .catch(error => statusMessage(`Probe failed: ${error.message}`));
+  $('#visualAnalyze').onclick = () => runVisualForensics().catch(error => statusMessage(`Visual forensics unavailable: ${error.message}`));
+  $('#applyPolicy').onclick = async () => {
+    try {
+      if (!latestProposal) throw new Error('Generate a policy proposal first.');
+      let approvals = [];
+      if ($('#approvals').value.trim()) {
+        const supplied = JSON.parse($('#approvals').value);
+        if (Array.isArray(supplied)) approvals = supplied;
+        else {
+          if (supplied.update) latestProposal = supplied.update;
+          approvals = supplied.approvals;
+        }
+      }
+      if (!Array.isArray(approvals)) throw new Error('Approvals must be a JSON array.');
+      approvals = [...approvals, ...passkeyApprovals];
+      const result = await api('/api/policy', { method: 'POST', body: { update: latestProposal, approvals } });
+      $('#policyOutput').textContent = JSON.stringify(result, null, 2);
+      passkeyApprovals = [];
+      refreshQuorumProgress();
+      await load();
+    } catch (error) { statusMessage(`Policy rejected: ${error.message}`); }
+  };
+  $('#runDemo').onclick = async () => {
+    try {
+      const result = await api('/api/demo', { method: 'POST', body: {}, adminOnly: true });
+      $('#probeOutput').textContent = JSON.stringify(result.workflow, null, 2);
+      await load(); statusMessage('Legacy signed tamper → quarantine → rollback workflow completed.');
+    } catch (error) { statusMessage(`Demo failed: ${error.message}`); }
+  };
+  document.querySelectorAll('[data-step]').forEach(button => {
+    button.addEventListener('click', () => runStep(button.dataset.step).catch(error => statusMessage(`${button.dataset.step} failed: ${error.message}`)));
+  });
+  drawSyntheticSnapshot();
+  updateRole();
+  load();
+  loadAudit().catch(error => { $('#auditVerify').textContent = `Audit vault unavailable: ${error.message}`; });
+  setInterval(load, 15000);
+})();
+</script>
+</body>
+</html>

@@ -7,3 +7,5 @@ coverage/
 *.log
 *.pem
 *.key
+.playwright-mcp/
+command-center-*.png

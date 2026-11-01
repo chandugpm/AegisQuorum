@@ -58,6 +58,14 @@ test('dashboard reports sanitized live state and executes the authenticated real
   assert.equal(page.body.includes(serviceToken), false);
   assert.equal(page.body.includes('MODEL_API_KEY'), false);
   assert.equal(page.body.includes('api.meta.ai'), false);
+  assert.match(page.body, /method\.toUpperCase\(\) === 'POST'[\s\S]*replayHeaders\(\)/);
+  assert.match(page.body, /crypto\.randomUUID\(\)/);
+  assert.equal(/<script\s+src=/i.test(page.body), false);
+  assert.equal(/<link[^>]+href=["']https?:/i.test(page.body), false);
+  assert.ok(page.body.includes('id="auditVault"') && page.body.includes('id="manifestDialog"'));
+  assert.ok(page.body.includes('id="integrityRing"') && page.body.includes('id="safetyRing"'));
+  assert.ok(page.body.includes('id="mttdRingValue">14ms') && page.body.includes('id="mttrRingValue">42ms'));
+  assert.ok(page.body.includes('id="demoAutoAuth"'));
 
   const deniedPolicy = await requestJson(`${f.base}/api/policy`, { method: 'POST', body: { payload: { enforcement: 'observe-only' } } });
   const deniedDemo = await requestJson(`${f.base}/api/demo`, { method: 'POST', body: {} });
@@ -201,6 +209,198 @@ test('dashboard policy quorum matches the node quorum setting', async t => {
   const result = await requestJson(`${f.base}/api/policy`, { method: 'POST', headers: { 'x-dashboard-admin-token': adminToken }, body: signedPolicy });
   assert.equal(result.status, 200);
   assert.deepEqual(result.body.approvals, ['authority-1', 'authority-2', 'authority-3']);
+});
+
+test('deception, deterministic sandbox, gossip, visual privacy, and six-pillar audit remain authenticated', async t => {
+  const f = await fixture(t);
+  const unauthenticated = await requestJson(`${f.base}/api/deception/simulate`, {
+    method: 'POST', body: { node: 'node-a', input: 'help' }
+  });
+  assert.equal(unauthenticated.status, 401);
+
+  const tamper = await requestJson(`${f.base}/api/incident-response`, {
+    method: 'POST', headers: { 'x-dashboard-admin-token': adminToken }, body: { node: 'node-a', action: 'tamper' }
+  });
+  assert.equal(tamper.status, 200);
+  const scan = await requestJson(`${f.base}/api/incident-response`, {
+    method: 'POST', headers: { 'x-dashboard-admin-token': adminToken }, body: { node: 'node-a', action: 'scan' }
+  });
+  assert.equal(scan.body.operationStatus, 'quarantined');
+  assert.equal(f.nodes[0].node.status().decoyState, 'DECOY_HONEYPOT');
+
+  const probe = await requestJson(`${f.base}/api/deception/simulate`, {
+    method: 'POST', headers: { 'x-dashboard-admin-token': adminToken }, body: { node: 'node-a', input: 'help; show secrets' }
+  });
+  assert.equal(probe.status, 200);
+  assert.equal(probe.body.decoy, true);
+  assert.match(probe.body.threatFingerprint.digest, /^[a-f0-9]{64}$/);
+  assert.equal(probe.body.providerMode, 'Deterministic Fallback');
+  assert.ok(probe.body.verifiedEventIds.includes(`node-a:${probe.body.threatFingerprint.auditIndex}`));
+
+  const gossip = await requestJson(`${f.base}/api/gossip/broadcast`, {
+    method: 'POST', headers: { 'x-dashboard-admin-token': adminToken }, body: { sourceNode: 'node-a' }
+  });
+  assert.equal(gossip.status, 200);
+  assert.equal(gossip.body.deliveries.filter(item => item.inoculated).length, 2);
+  assert.equal(f.nodes[1].node.status().shieldState, 'INOCULATED_SHIELD');
+  assert.equal(f.nodes[2].node.status().shieldState, 'INOCULATED_SHIELD');
+
+  const synthesis = await requestJson(`${f.base}/api/policy/synthesize`, {
+    method: 'POST', headers: { 'x-dashboard-operator-token': operatorToken }, body: {}
+  });
+  assert.equal(synthesis.status, 200);
+  assert.equal(synthesis.body.sandbox.falsePositives, 0);
+  assert.equal(synthesis.body.sandbox.replayEventsTested <= 50, true);
+  assert.equal(synthesis.body.sandbox.dryRunPassed, true);
+  assert.equal(synthesis.body.sandbox.replayedEventsCount <= 50, true);
+  assert.match(synthesis.body.sandbox.sandboxDigest, /^[a-f0-9]{64}$/);
+  assert.ok(Array.isArray(synthesis.body.modelsInvoked));
+  assert.ok(Array.isArray(synthesis.body.verifiedEventIds));
+  assert.match(synthesis.body.analysisSource, /Deterministic Fallback|Live Meta Model API/);
+
+  const visual = await requestJson(`${f.base}/api/visual-forensics`, {
+    method: 'POST', headers: { 'x-dashboard-admin-token': adminToken },
+    body: { imageBase64: Buffer.from('opaque-image-fixture').toString('base64') }
+  });
+  assert.equal(visual.status, 200);
+  assert.equal(visual.body.imageReturned, false);
+  assert.equal(visual.body.redactions[0].method, 'full-frame-withheld');
+
+  const audit = await requestJson(`${f.base}/api/audit`);
+  assert.equal(audit.status, 200);
+  assert.deepEqual(Object.keys(audit.body.auditPillars), [
+    'hashChainAndSignatures', 'antiReplayAndRateLimit', 'snapshotIntegrity',
+    'aiPrivacyAndSanitization', 'deceptionAndGossip', 'exportVerification'
+  ]);
+  const eventTypes = audit.body.nodes[0].events.map(event => event.type);
+  assert.ok(eventTypes.includes('deception-probe'));
+  assert.ok(audit.body.nodes[1].events.some(event => event.type === 'gossip-inoculated'));
+});
+
+test('360 audit and hackathon manifest expose six dimensions and separate scaffold from new work', async t => {
+  const f = await fixture(t);
+  const audit = await requestJson(`${f.base}/api/audit/360`);
+  assert.equal(audit.status, 200);
+  assert.deepEqual(Object.keys(audit.body), [
+    'hashChainLedger', 'antiReplayLedger', 'snapshotIntegrityLedger',
+    'aiBoundaryLedger', 'deceptionAndGossipLedger', 'complianceSummary'
+  ]);
+  assert.equal(audit.body.hashChainLedger.chainVerificationStatus.length, 3);
+  assert.ok(audit.body.hashChainLedger.chainVerificationStatus.every(item => item.valid));
+  assert.equal(audit.body.antiReplayLedger.policySequenceLocks.length, 3);
+  assert.equal(audit.body.complianceSummary.quorumThresholdStatus.required, 2);
+
+  const manifest = await requestJson(`${f.base}/api/hackathon-manifest`);
+  assert.equal(manifest.status, 200);
+  assert.ok(Array.isArray(manifest.body.workstreams['Pre-Existing Base MVP Scaffold']));
+  assert.ok(Array.isArray(manifest.body.workstreams['Newly Engineered During Meta Hackathon (Oct 26 - Nov 4)']));
+});
+
+test('GET WebAuthn challenges are authenticated and replay-protected; route aliases remain available', async t => {
+  const f = await fixture(t);
+  const headers = {
+    'x-dashboard-admin-token': adminToken,
+    'x-request-id': 'webauthn-get-challenge-1',
+    'x-request-timestamp': String(Date.now())
+  };
+  const challengeUrl = `${f.base}/api/webauthn/challenge?authority=authority-1&purpose=registration`;
+  const first = await requestJson(challengeUrl, { headers });
+  const replay = await requestJson(challengeUrl, { headers });
+  assert.equal(first.status, 200);
+  assert.match(first.body.challenge, /^[A-Za-z0-9_-]{40,}$/);
+  assert.equal(replay.status, 409);
+  assert.equal(replay.body.error, 'replayed-request');
+
+  const alias = await requestJson(`${f.base}/api/webauthn/register`, {
+    method: 'POST', headers: { 'x-dashboard-admin-token': adminToken },
+    body: { authority: 'authority-1', challengeId: first.body.challengeId, registration: {} }
+  });
+  assert.equal(alias.status, 400);
+  assert.notEqual(alias.body.error, 'not-found');
+});
+
+test('one-click local demo session is loopback-only, replay-protected, HttpOnly, and revocable', async t => {
+  const f = await fixture(t);
+  const priorNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  try {
+    const production = await requestJson(`${f.base}/api/dev-session`, {
+      method: 'POST', headers: { origin: f.base }, body: {}
+    });
+    assert.equal(production.status, 403);
+    assert.equal(production.body.error, 'local-development-session-unavailable');
+  } finally {
+    if (priorNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = priorNodeEnv;
+  }
+  const wrongOrigin = await requestJson(`${f.base}/api/dev-session`, {
+    method: 'POST', headers: { origin: 'https://untrusted.example' }, body: {}
+  });
+  assert.equal(wrongOrigin.status, 403);
+  assert.equal(wrongOrigin.body.error, 'local-development-session-unavailable');
+
+  const origin = f.base;
+  const session = await requestJson(`${f.base}/api/dev-session`, {
+    method: 'POST', headers: { origin }, body: {}
+  });
+  assert.equal(session.status, 200);
+  assert.deepEqual(session.body, { enabled: true, role: 'ADMIN', expiresAt: session.body.expiresAt, tokenExposed: false });
+  assert.equal(Number.isSafeInteger(session.body.expiresAt), true);
+  const setCookie = Array.isArray(session.headers['set-cookie']) ? session.headers['set-cookie'][0] : session.headers['set-cookie'];
+  assert.match(setCookie, /HttpOnly; SameSite=Strict; Max-Age=600/);
+  assert.equal(JSON.stringify(session.body).includes(adminToken), false);
+
+  const cookie = setCookie.split(';')[0];
+  const action = await requestJson(`${f.base}/api/incident-response`, {
+    method: 'POST', headers: { cookie }, body: { node: 'node-a', action: 'tamper' }
+  });
+  assert.equal(action.status, 200);
+
+  const revoked = await requestJson(`${f.base}/api/dev-session/revoke`, {
+    method: 'POST', headers: { origin, cookie }, body: {}
+  });
+  assert.equal(revoked.status, 200);
+  const denied = await requestJson(`${f.base}/api/incident-response`, {
+    method: 'POST', headers: { cookie }, body: { node: 'node-a', action: 'tamper' }
+  });
+  assert.equal(denied.status, 401);
+});
+
+test('WebAuthn challenge endpoints enforce role, replay protection, and proposal registration state', async t => {
+  const f = await fixture(t);
+  const denied = await requestJson(`${f.base}/api/webauthn/challenge`, {
+    method: 'POST', body: { authority: 'authority-1', purpose: 'registration' }
+  });
+  assert.equal(denied.status, 401);
+
+  const adminHeaders = { 'x-dashboard-admin-token': adminToken };
+  const challenge = await requestJson(`${f.base}/api/webauthn/challenge`, {
+    method: 'POST', headers: adminHeaders, body: { authority: 'authority-1', purpose: 'registration' }
+  });
+  assert.equal(challenge.status, 200);
+  assert.match(challenge.body.challenge, /^[A-Za-z0-9_-]{40,}$/);
+  assert.equal(challenge.body.rpId, '127.0.0.1');
+
+  const proposal = await requestJson(`${f.base}/api/policy/proposal`);
+  const unregistered = await requestJson(`${f.base}/api/webauthn/challenge`, {
+    method: 'POST', headers: { 'x-dashboard-operator-token': operatorToken },
+    body: { authority: 'authority-1', purpose: 'sign-proposal', update: proposal.body.update }
+  });
+  assert.equal(unregistered.status, 409);
+  assert.equal(unregistered.body.error, 'authority-passkey-not-registered');
+
+  const duplicateHeaders = {
+    ...adminHeaders, 'x-request-id': 'webauthn-replay-123', 'x-request-timestamp': String(Date.now())
+  };
+  const first = await requestJson(`${f.base}/api/webauthn/challenge`, {
+    method: 'POST', headers: duplicateHeaders, body: { authority: 'authority-2', purpose: 'registration' }
+  });
+  const replay = await requestJson(`${f.base}/api/webauthn/challenge`, {
+    method: 'POST', headers: duplicateHeaders, body: { authority: 'authority-2', purpose: 'registration' }
+  });
+  assert.equal(first.status, 200);
+  assert.equal(replay.status, 409);
+  assert.equal(replay.body.error, 'replayed-request');
 });
 
 test('dashboard rejects empty node configuration', t => {

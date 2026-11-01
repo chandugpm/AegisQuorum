@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { SecurityNode, createAuthorities, authorityTrust } = require('../src/core');
-const { API_URL, boundedEvidence, createIncidentAnalyst } = require('../src/ai-analyst');
+const { API_URL, BASETEN_API_URL, HONEYPOT_BASETEN_MODEL, boundedEvidence, createIncidentAnalyst } = require('../src/ai-analyst');
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'danms-analyst-'));
@@ -84,6 +84,9 @@ test('missing Meta credentials produce an explicit deterministic fallback', asyn
   assert.equal(result.analysisStatus, 'fallback');
   assert.equal(result.providerStatus, 'not-configured');
   assert.equal(result.errorCode, 'model-api-key-missing');
+  assert.equal(result.providerMode, 'Deterministic Fallback');
+  assert.deepEqual(result.modelsInvoked, []);
+  assert.ok(Array.isArray(result.verifiedEventIds));
   assert.match(result.analysis.incidentSummary.statement, /tamper-detection/);
   assert.ok(result.analysis.severity.evidenceRefs.every(ref => ref.startsWith('node-a:')));
 });
@@ -201,4 +204,58 @@ test('offline nodes remain explicit and do not cause unsupported incident claims
   assert.equal(result.analysis.observedFacts.length, 0);
   assert.ok(result.analysis.limitations.some(item => item.includes('could not be independently verified')));
   assert.deepEqual(result.analysis.incidentSummary.evidenceRefs, ['node-a:status']);
+});
+
+test('Baseten incident analysis and Chameleon responses report model and verified evidence provenance', async t => {
+  const source = fixture(t);
+  const evidence = boundedEvidence(source.statuses, source.reports);
+  const eventId = evidence.nodes[0].events.at(-1).id;
+  const calls = [];
+  const analyst = createIncidentAnalyst({
+    apiKey: '', basetenApiKey: 'test-baseten-key',
+    fetchImpl: async (url, options) => {
+      const request = JSON.parse(options.body);
+      calls.push({ url, request });
+      const content = request.model === 'muse-spark-1.3' ? JSON.stringify(analysisFor(eventId)) : 'synthetic edge-router status: healthy';
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 });
+    }
+  });
+  const analysis = await analyst.analyze(source);
+  assert.equal(calls[0].url, BASETEN_API_URL);
+  assert.equal(calls[0].request.model, 'muse-spark-1.3');
+  assert.equal(analysis.providerMode, 'Live Baseten Open-Weights (meta-models/muse-spark-open-1026)');
+  assert.deepEqual(analysis.modelsInvoked, ['muse-spark-1.3']);
+  assert.ok(analysis.verifiedEventIds.includes(eventId));
+
+  const decoy = await analyst.deceptionResponse({ commandPattern: 'credential-probing', payloadDigest: 'a'.repeat(64) });
+  assert.equal(calls[1].request.model, HONEYPOT_BASETEN_MODEL);
+  assert.equal(decoy.providerMode, 'Live Baseten Open-Weights (meta-models/muse-spark-open-1026)');
+  assert.deepEqual(decoy.modelsInvoked, [HONEYPOT_BASETEN_MODEL]);
+  assert.deepEqual(decoy.verifiedEventIds, []);
+});
+
+test('Baseten visual providers receive multimodal payloads and validate segmentation output', async () => {
+  const calls = [];
+  const analyst = createIncidentAnalyst({
+    apiKey: '', basetenApiKey: 'test-baseten-key',
+    fetchImpl: async (_url, options) => {
+      const request = JSON.parse(options.body);
+      calls.push(request);
+      const content = request.model === 'muse-voice-transcribe'
+        ? 'Operator note: inspect node-a.'
+        : JSON.stringify({ redactionBoxes: [{ label: 'credential', box: [0.1, 0.2, 0.3, 0.1] }] });
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 });
+    }
+  });
+  const result = await analyst.visualProviders({
+    imageBase64: Buffer.from('small-image').toString('base64'),
+    audioBase64: Buffer.from('small-audio').toString('base64'), audioFormat: 'wav'
+  });
+  assert.deepEqual(calls.map(call => call.model), ['muse-voice-transcribe', 'sam-3.1']);
+  assert.equal(calls[0].messages[1].content[1].type, 'input_audio');
+  assert.equal(calls[1].messages[1].content[1].type, 'image_url');
+  assert.deepEqual(result.redactionBoxes, [{ label: 'credential', box: [0.1, 0.2, 0.3, 0.1] }]);
+  assert.equal(result.providerMode, 'Live Baseten Open-Weights (meta-models/muse-spark-open-1026)');
+  assert.deepEqual(result.modelsInvoked, ['muse-voice-transcribe', 'sam-3.1']);
+  assert.deepEqual(result.verifiedEventIds, []);
 });

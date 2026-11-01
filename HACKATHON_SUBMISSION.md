@@ -1,6 +1,6 @@
 # Meta Global AI Developer Hackathon Submission
 
-## Decentralized Network Security MVP
+## AegisQuorum
 
 This submission extends a three-node security-management scaffold with auditable AI-assisted deception, policy synthesis, passkey quorum approvals, multimodal privacy handling, peer threat inoculation, and a unified audit view. It is designed to demonstrate security properties locally without requiring external backend packages or live model credentials.
 

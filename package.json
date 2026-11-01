@@ -1,8 +1,8 @@
 {
-  "name": "decentralized-network-security-mvp",
+  "name": "aegis-quorum-security",
   "version": "0.1.0",
   "private": true,
-  "description": "Local three-node security management MVP",
+  "description": "A Bio-Mathematical Autonomous Security Platform combining Meta AI with Ed25519 Cryptography.",
   "scripts": {
     "start": "node src/launch-local.js",
     "test": "node --test",

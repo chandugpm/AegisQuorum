@@ -1,6 +1,6 @@
-# Decentralized Network Security MVP
+# AegisQuorum
 
-A local three-node security management MVP built with Node.js. It demonstrates signed policy updates, threshold approvals, integrity monitoring, tamper detection, quarantine, verified rollback, audit chains, an evidence-grounded Meta Model API incident analyst, and a dashboard.
+A production-grade autonomous bio-digital defense grid built with Node.js. It combines signed policy updates, threshold approvals, integrity monitoring, tamper detection, quarantine, verified rollback, audit chains, an evidence-grounded Meta Model API incident analyst, and a command-center dashboard.
 
 ## Hackathon Rule 4: New Work Only
 
@@ -113,7 +113,7 @@ The `security-state` volume stores authority identities, trust material, node st
 Build the image directly:
 
 ```bash
-docker build -t decentralized-network-security-mvp .
+docker build -t aegis-quorum-security .
 ```
 
 The image runs the local launcher by default:
@@ -123,7 +123,7 @@ docker run --rm \
   -p 127.0.0.1:7000:7000 \
   -e DASHBOARD_ADMIN_TOKEN=replace-with-a-long-random-token \
   -e NODE_SERVICE_TOKEN=replace-with-a-different-long-random-token \
-  decentralized-network-security-mvp
+  aegis-quorum-security
 ```
 
 For persistent state, mount a volume at `/app/.runtime`.

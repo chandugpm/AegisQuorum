@@ -69,6 +69,13 @@ test('dashboard reports sanitized live state and executes the authenticated real
   assert.ok(page.body.includes('id="metaHolo"'));
   assert.ok(page.body.includes('▶ RUN AUTONOMOUS DEMO'));
   assert.ok(page.body.includes('@keyframes grid-flow') && page.body.includes('@keyframes mesh-flow'));
+  assert.ok(page.body.includes('id="entropyRadar"') && page.body.includes('id="sirGraph"'));
+  assert.ok(page.body.includes('id="voiceC2"') && page.body.includes('id="authorizeHealing"'));
+  assert.ok(page.body.includes('id="ghostAB"') && page.body.includes('id="ghostAC"'));
+  assert.ok(page.body.includes('id="preCogOutput"') && page.body.includes('id="sirTiming"'));
+  assert.ok(page.body.includes('id="runPreCog"') && page.body.includes('id="voiceC2"'));
+  assert.ok(page.body.includes('id="authorizeHealing"') && page.body.includes('patchExecution'));
+  assert.ok(page.body.includes('dI/dt = βSI/N − γI') && page.body.includes('id="ghostAB"'));
 
   const deniedPolicy = await requestJson(`${f.base}/api/policy`, { method: 'POST', body: { payload: { enforcement: 'observe-only' } } });
   const deniedDemo = await requestJson(`${f.base}/api/demo`, { method: 'POST', body: {} });
@@ -297,6 +304,34 @@ test('360 audit and hackathon manifest expose six dimensions and separate scaffo
   assert.equal(manifest.status, 200);
   assert.ok(Array.isArray(manifest.body.workstreams['Pre-Existing Base MVP Scaffold']));
   assert.ok(Array.isArray(manifest.body.workstreams['Newly Engineered During Meta Hackathon (Oct 26 - Nov 4)']));
+});
+
+test('pre-cog API derives prediction metrics from verified audit evidence and exposes them in audit dimension five', async t => {
+  const f = await fixture(t);
+  f.nodes[0].node.simulateTamper();
+  f.nodes[0].node.scanIntegrity();
+  const denied = await requestJson(`${f.base}/api/pre-cog/analyze`, { method: 'POST', body: {} });
+  assert.equal(denied.status, 401);
+
+  const prediction = await requestJson(`${f.base}/api/pre-cog/analyze`, {
+    method: 'POST', headers: { 'x-dashboard-admin-token': adminToken }, body: { node: 'node-a' }
+  });
+  assert.equal(prediction.status, 200);
+  assert.equal(prediction.body.sourceNode, 'node-a');
+  assert.equal(prediction.body.entropyScore, f.nodes[0].node.audit.find(event => event.type === 'tamper-detected').details.entropyScore);
+  assert.equal(prediction.body.sirBetaValue, 0.85);
+  assert.equal(prediction.body.sirGammaValue, 0.4);
+  assert.ok(prediction.body.predictedVictims.every(node => ['node-b', 'node-c'].includes(node)));
+  assert.match(prediction.body.patchExecution, /advisory-only/);
+  assert.ok(prediction.body.verifiedEventIds.includes(prediction.body.evidenceEventId));
+
+  const audit360 = await requestJson(`${f.base}/api/audit/360`);
+  const fingerprints = audit360.body.deceptionAndGossipLedger.honeypotFingerprints;
+  const fingerprint = fingerprints.find(item => item.type === 'threat-fingerprint' && item.node === 'node-a');
+  assert.ok(fingerprint);
+  assert.equal(fingerprint.evidence.sirBetaValue, 0.85);
+  assert.equal(fingerprint.evidence.sirGammaValue, 0.4);
+  assert.equal(fingerprint.evidence.entropyScore, prediction.body.entropyScore);
 });
 
 test('GET WebAuthn challenges are authenticated and replay-protected; route aliases remain available', async t => {

@@ -12,6 +12,7 @@ This submission extends a three-node security-management scaffold with auditable
 | Ed25519 2-of-3 policy approvals, SHA-256 integrity monitoring, signed snapshots, quarantine, and verified rollback | Verified-event policy synthesis with an Ed25519-signed 50-event dry-run certificate |
 | Replay-protected APIs and signed, sanitized audit chains | WebAuthn passkey registration/assertion paths for authority approvals |
 | Deterministic analyst fallback and Meta API incident analysis | Visual/voice privacy forensics, verified-event correlation, cross-node gossip antibodies/receipts, and the 360-degree audit endpoint |
+|  | **Feature 6: Bio-Digital Predictive Engine (SIR + Entropy)** with Shannon entropy classification, a bounded three-node SIR projection, verified-event Muse Spark predictions, and quorum-gated containment proposals |
 
 The structured version is available at `GET /api/hackathon-manifest`.
 
@@ -24,6 +25,7 @@ The structured version is available at `GET /api/hackathon-manifest`.
 5. Request `POST /api/policy/synthesize`; inspect the monotonic candidate policy and signed dry-run certificate.
 6. Submit canvas/image and optional voice evidence to `POST /api/visual-forensics`; verify the redaction proof hash and event IDs against the signed node audit exports.
 7. Inspect `GET /api/audit/360` and `GET /api/hackathon-manifest` for unified evidence and Rule-4 separation.
+8. Use the Aegis pre-cog panel to inspect the entropy score, SIR infection/recovery curves, predicted peer paths, and impact time. Any remediation remains advisory until a distinct WebAuthn quorum approves the security policy; generated code is never executed.
 
 All mutating dashboard endpoints require the existing admin/operator tokens and replay-protection headers. The WebAuthn ceremony uses challenge, origin, relying-party, signature, and authenticator-counter checks; the existing offline `npm run approve-policy` CLI remains supported.
 

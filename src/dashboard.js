@@ -207,7 +207,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
             }))
           },
           deceptionAndGossipLedger: {
-            honeypotFingerprints: eventRows.filter(event => event.type === 'deception-probe'),
+            honeypotFingerprints: eventRows.filter(event => ['deception-probe', 'threat-fingerprint'].includes(event.type)),
             peerInoculationReceipts: gossipReceipts.slice(-100)
           },
           complianceSummary: {
@@ -265,9 +265,9 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
       const isAdmin = equal(suppliedAdmin, adminToken) || Boolean(session && session.expiresAt > Date.now() && process.env.NODE_ENV !== 'production');
       const isOperator = operatorToken !== undefined && equal(suppliedOperator, operatorToken);
       if (!isAdmin && !isOperator) { metrics.increment('auth_failures_total'); return json(response, 401, { error: 'administrator-or-operator-token-required' }); }
-      const adminOnly = ['/api/demo', '/api/incident-analysis', '/api/incident-response', '/api/deception/simulate', '/api/gossip/broadcast', '/api/visual-forensics', '/api/webauthn/register-authority', '/api/webauthn/register'];
+      const adminOnly = ['/api/demo', '/api/incident-analysis', '/api/incident-response', '/api/deception/simulate', '/api/gossip/broadcast', '/api/visual-forensics', '/api/pre-cog/analyze', '/api/webauthn/register-authority', '/api/webauthn/register'];
       if (isOperator && adminOnly.includes(route)) { metrics.increment('authorization_denials_total'); return json(response, 403, { error: 'admin-role-required' }); }
-      const mutation = ['/api/policy', '/api/demo', '/api/incident-analysis', '/api/incident-response', '/api/deception/simulate', '/api/policy/synthesize', '/api/gossip/broadcast', '/api/visual-forensics', '/api/webauthn/challenge', '/api/webauthn/register-authority', '/api/webauthn/register', '/api/webauthn/sign-proposal', '/api/webauthn/sign'].includes(route);
+      const mutation = ['/api/policy', '/api/demo', '/api/incident-analysis', '/api/incident-response', '/api/deception/simulate', '/api/policy/synthesize', '/api/gossip/broadcast', '/api/visual-forensics', '/api/pre-cog/analyze', '/api/webauthn/challenge', '/api/webauthn/register-authority', '/api/webauthn/register', '/api/webauthn/sign-proposal', '/api/webauthn/sign'].includes(route);
       const security = mutation ? requestSecurity(request, replayCache, { required: true }) : { checked: false };
       if (mutation && security.checked) recordSecurityEvent(request, 'accepted', route);
       let input;
@@ -422,6 +422,39 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
           modelsInvoked: [...new Set([...(analysis.modelsInvoked || []), ...(synthesis.modelsInvoked || [])])],
           verifiedEventIds: [...new Set([...(analysis.verifiedEventIds || []), ...(synthesis.verifiedEventIds || [])])],
           analysisSource: analysis.providerSource, analysisStatus: analysis.analysisStatus, privacyLedger: analysis.privacyLedger
+        });
+      }
+      if (route === '/api/pre-cog/analyze') {
+        if (!incidentRateLimiter.allow(clientKey(request))) return json(response, 429, { error: 'pre-cog-rate-limited' });
+        const [nodeStatuses, reports] = await Promise.all([statuses(), auditReports()]);
+        const verifiedReports = reports.filter(report => verifySanitizedAuditEvidence(report).valid);
+        const candidates = verifiedReports.flatMap(report => report.events
+          .filter(event => event.type === 'tamper-detected')
+          .map(event => ({ report, event })))
+          .filter(item => item.event.evidence && Number.isFinite(item.event.evidence.entropyScore) &&
+            Number.isFinite(item.event.evidence.sirBetaValue) && Number.isFinite(item.event.evidence.sirGammaValue));
+        const selected = typeof input.node === 'string'
+          ? candidates.find(item => item.report.node === input.node)
+          : candidates.at(-1);
+        if (!selected) return json(response, 409, { error: 'verified-predictive-threat-evidence-required' });
+        const sourceNode = selected.report.node;
+        const evidence = selected.event.evidence;
+        const verifiedEventIds = [`${sourceNode}:${selected.event.index}`];
+        const availableNodes = nodeStatuses.filter(node => node.mode !== 'offline').map(node => node.name);
+        const prediction = await incidentAnalyst.predictThreat({
+          entropyScore: evidence.entropyScore,
+          sirBetaValue: evidence.sirBetaValue,
+          sirGammaValue: evidence.sirGammaValue,
+          sourceNode,
+          nodes: availableNodes,
+          verifiedEventIds
+        });
+        return json(response, 200, {
+          ...prediction,
+          threatType: evidence.attackClassification || 'INTEGRITY_TAMPER',
+          attackVectorHash: evidence.actual,
+          evidenceEventId: verifiedEventIds[0],
+          predictionBoundary: 'AI prediction is advisory; patchCode is never executed. Applying policy requires distinct authority quorum approval.'
         });
       }
       if (route === '/api/gossip/broadcast') {

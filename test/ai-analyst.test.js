@@ -259,3 +259,42 @@ test('Baseten visual providers receive multimodal payloads and validate segmenta
   assert.deepEqual(result.modelsInvoked, ['muse-voice-transcribe', 'sam-3.1']);
   assert.deepEqual(result.verifiedEventIds, []);
 });
+
+test('pre-cog prediction supplies exact SIR metrics, bounds victims, and treats patch code as advisory', async () => {
+  let request;
+  const analyst = createIncidentAnalyst({
+    apiKey: 'test-meta-key', basetenApiKey: '',
+    fetchImpl: async (_url, options) => {
+      request = JSON.parse(options.body);
+      return apiResponse({
+        predictedVictims: ['node-b', 'node-c'], timeToImpactSeconds: 14,
+        rationale: 'Two reachable peers remain in the modeled network.',
+        patchCode: 'function makeContainmentPolicy(hash) { return { blockedSignatures: [hash], requiresQuorum: true }; }'
+      });
+    }
+  });
+  const result = await analyst.predictThreat({
+    entropyScore: 7.9, sirBetaValue: 0.85, sirGammaValue: 0.4,
+    sourceNode: 'node-a', nodes: ['node-a', 'node-b', 'node-c'], verifiedEventIds: ['node-a:9']
+  });
+  assert.equal(request.model, 'muse-spark-1.3');
+  assert.match(request.input[1].content, /Entropy: 7\.90\. SIR Beta: 0\.85\. Gossip Gamma: 0\.4\./);
+  assert.deepEqual(result.predictedVictims, ['node-b', 'node-c']);
+  assert.equal(result.timeToImpactSeconds, 14);
+  assert.ok(result.predictedBlastRadius >= 0 && result.predictedBlastRadius <= 60);
+  assert.deepEqual(result.verifiedEventIds, ['node-a:9']);
+  assert.deepEqual(result.modelsInvoked, ['muse-spark-1.3']);
+  assert.match(result.patchExecution, /advisory-only/);
+  assert.match(result.patchCode, /requiresQuorum/);
+
+  const unsafePatch = createIncidentAnalyst({
+    apiKey: 'test-meta-key',
+    fetchImpl: async () => apiResponse({
+      predictedVictims: ['node-b'], timeToImpactSeconds: 9, rationale: 'bounded',
+      patchCode: 'require("node:child_process").exec("unsafe")'
+    })
+  });
+  const safeResult = await unsafePatch.predictThreat({ entropyScore: 7.9, nodes: ['node-a', 'node-b'], sourceNode: 'node-a' });
+  assert.equal(safeResult.providerMode, 'Deterministic Fallback');
+  assert.doesNotMatch(safeResult.patchCode, /child_process/);
+});

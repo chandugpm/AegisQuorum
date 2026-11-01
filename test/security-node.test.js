@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { SecurityNode, createAuthorities, authorityTrust, makePolicyUpdate, approvePolicy, readJson, writeJsonAtomic, verify, verifyThreatAntibody, stable } = require('../src/core');
+const { SecurityNode, createAuthorities, authorityTrust, makePolicyUpdate, approvePolicy, readJson, writeJsonAtomic, verify, verifyThreatAntibody, stable, calculateEntropy, simulateSIR } = require('../src/core');
 
 function fixture() { const root = fs.mkdtempSync(path.join(os.tmpdir(), 'danms-')); const authorities = createAuthorities(path.join(root, 'authorities')); const node = new SecurityNode({ directory: path.join(root, 'node'), name: 'test-node', trustedAuthorities: authorityTrust(authorities), clock: () => '2026-10-12T00:00:00.000Z' }); return { root, node, authorities }; }
 function policy(sequence = 1) { return makePolicyUpdate(sequence, { enforcement: 'observe-only' }, '2026-10-12T00:00:00.000Z'); }
@@ -62,4 +62,34 @@ test('sandbox certificates, honeypot fingerprints, threat antibodies, and inocul
   const { signature: receiptSignature, publicKey, ...unsignedReceipt } = result.receipt;
   assert.equal(peer.status().shieldState, 'INOCULATED_SHIELD');
   assert.equal(verify(publicKey, stable(unsignedReceipt), receiptSignature), true);
+});
+
+test('Shannon entropy classifies encrypted tampering and SIR metrics are signed into the audit fingerprint', t => {
+  const f = fixture(); t.after(() => fs.rmSync(f.root, { recursive: true, force: true }));
+  const uniformBytes = Buffer.from(Array.from({ length: 2048 }, (_, index) => index % 256));
+  assert.equal(calculateEntropy(Buffer.alloc(128)), 0);
+  assert.equal(calculateEntropy(uniformBytes), 8);
+  const sir = simulateSIR(0.85, 0.4, { population: 3 });
+  assert.equal(sir.basicReproductionNumber, 2.125);
+  assert.ok(sir.series.length > 1);
+  assert.ok(sir.predictedBlastRadius >= 1 && sir.predictedBlastRadius <= 3);
+
+  fs.writeFileSync(f.node.paths.protected, uniformBytes);
+  const result = f.node.scanIntegrity();
+  assert.equal(result.attackClassification, 'RANSOMWARE_ENCRYPTION_ATTACK');
+  assert.equal(result.entropyScore, 8);
+  assert.equal(result.sirBetaValue, 0.85);
+  assert.equal(result.sirGammaValue, 0.4);
+  assert.ok(Number.isFinite(result.predictedBlastRadius));
+  assert.equal(f.node.verifyAudit().valid, true);
+
+  const fingerprints = readJson(path.join(f.node.paths.quarantine, 'threat-fingerprint.json'), []);
+  const { signature, auditIndex, ...fingerprint } = fingerprints.at(-1);
+  assert.equal(Number.isSafeInteger(auditIndex), true);
+  assert.equal(fingerprint.attackClassification, 'RANSOMWARE_ENCRYPTION_ATTACK');
+  assert.equal(fingerprint.entropyScore, 8);
+  assert.equal(verify(f.node.identity.publicKey, stable(fingerprint), signature), true);
+  const auditFingerprint = f.node.audit.find(record => record.type === 'threat-fingerprint');
+  assert.equal(auditFingerprint.details.sirBetaValue, 0.85);
+  assert.equal(auditFingerprint.details.predictedBlastRadius, result.predictedBlastRadius);
 });

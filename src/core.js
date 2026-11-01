@@ -3,6 +3,78 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
+function calculateEntropy(value) {
+  const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value || []);
+  if (!buffer.length) return 0;
+  const frequencies = new Uint32Array(256);
+  for (const byte of buffer) frequencies[byte]++;
+  let entropy = 0;
+  for (const frequency of frequencies) {
+    if (!frequency) continue;
+    const probability = frequency / buffer.length;
+    entropy -= probability * Math.log2(probability);
+  }
+  return entropy;
+}
+function simulateSIR(beta = 0.85, gamma = 0.4, { population = 3, initialInfected = 1, timeStep = 0.1, horizonSeconds = 60, saturationThreshold = 0.8 } = {}) {
+  if (!Number.isFinite(beta) || beta < 0 || beta > 10 || !Number.isFinite(gamma) || gamma <= 0 || gamma > 10 ||
+      !Number.isSafeInteger(population) || population < 2 || population > 10000 ||
+      !Number.isFinite(initialInfected) || initialInfected <= 0 || initialInfected >= population ||
+      !Number.isFinite(timeStep) || timeStep <= 0 || timeStep > 1 ||
+      !Number.isFinite(horizonSeconds) || horizonSeconds <= 0 || horizonSeconds > 300 ||
+      !Number.isFinite(saturationThreshold) || saturationThreshold <= 0 || saturationThreshold >= 1) {
+    throw new Error('sir-parameters-invalid');
+  }
+  let susceptible = population - initialInfected;
+  let infected = initialInfected;
+  let recovered = 0;
+  let peakInfected = infected;
+  let timeToSaturationSeconds = null;
+  const series = [];
+  const steps = Math.ceil(horizonSeconds / timeStep);
+  for (let step = 0; step <= steps; step++) {
+    const timeSeconds = Math.min(horizonSeconds, step * timeStep);
+    const infectionRate = beta * susceptible * infected / population;
+    const recoveryRate = gamma * infected;
+    if (step === 0 || Math.abs(timeSeconds - Math.round(timeSeconds)) < timeStep / 2 || step === steps) {
+      series.push({
+        timeSeconds: Number(timeSeconds.toFixed(2)),
+        susceptible: Number(susceptible.toFixed(4)),
+        infected: Number(infected.toFixed(4)),
+        recovered: Number(recovered.toFixed(4)),
+        infectionRate: Number(infectionRate.toFixed(4)),
+        recoveryRate: Number(recoveryRate.toFixed(4))
+      });
+    }
+    if (timeToSaturationSeconds === null && susceptible <= population * (1 - saturationThreshold)) {
+      timeToSaturationSeconds = Number(timeSeconds.toFixed(2));
+    }
+    if (step === steps) break;
+    const infectedDelta = (infectionRate - recoveryRate) * timeStep;
+    const susceptibleDelta = -infectionRate * timeStep;
+    const recoveredDelta = recoveryRate * timeStep;
+    susceptible = Math.max(0, susceptible + susceptibleDelta);
+    infected = Math.max(0, infected + infectedDelta);
+    recovered = Math.min(population, recovered + recoveredDelta);
+    const total = susceptible + infected + recovered;
+    if (Math.abs(total - population) > 1e-8) susceptible = Math.max(0, susceptible + population - total);
+    peakInfected = Math.max(peakInfected, infected);
+  }
+  const affected = population - (series.at(-1)?.susceptible || 0);
+  return {
+    beta,
+    gamma,
+    basicReproductionNumber: Number((beta / gamma).toFixed(4)),
+    population,
+    timeStep,
+    horizonSeconds,
+    saturationThreshold,
+    timeToSaturationSeconds,
+    predictedBlastRadius: Number(affected.toFixed(3)),
+    peakInfected: Number(peakInfected.toFixed(3)),
+    series
+  };
+}
 const stable = (value) => {
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
   if (value && typeof value === 'object') return `{${Object.keys(value).sort().map(k => `${JSON.stringify(k)}:${stable(value[k])}`).join(',')}}`;
@@ -504,12 +576,32 @@ class SecurityNode {
   scanIntegrity() {
     const checked = this.verifySnapshot();
     if (!checked.valid) return this.enterSafeMode(`trusted-snapshot-${checked.reason}`);
-    const actual = this.digestProtected();
+    const protectedBytes = fs.readFileSync(this.paths.protected);
+    const actual = sha256(protectedBytes);
     if (actual === checked.snapshot.digest) { this.appendAudit('integrity-ok', { digest: actual }); return { clean: true, digest: actual, mode: this.state.mode }; }
-    const evidence = { detectedAt: this.clock(), expected: checked.snapshot.digest, actual, source: this.paths.protected };
+    const entropyScore = calculateEntropy(protectedBytes);
+    const attackClassification = entropyScore > 7.5 ? 'RANSOMWARE_ENCRYPTION_ATTACK' : 'INTEGRITY_TAMPER';
+    const sir = simulateSIR(0.85, 0.4, { population: 3, initialInfected: 1 });
+    const predictedBlastRadius = sir.timeToSaturationSeconds ?? sir.horizonSeconds;
+    const threatMetrics = {
+      entropyScore: Number(entropyScore.toFixed(4)),
+      sirBetaValue: sir.beta,
+      sirGammaValue: sir.gamma,
+      predictedBlastRadius,
+      predictedAffectedNodes: sir.predictedBlastRadius,
+      timeToImpactSeconds: predictedBlastRadius,
+      attackClassification
+    };
+    this.state.lastThreatMetrics = threatMetrics;
+    const evidence = { detectedAt: this.clock(), expected: checked.snapshot.digest, actual, ...threatMetrics, source: this.paths.protected };
     writeJsonAtomic(path.join(this.paths.quarantine, `${Date.now()}-tamper-evidence.json`), evidence);
     this.state.quarantined = true; this.state.mode = 'quarantined'; this.state.decoyState = 'DECOY_HONEYPOT'; this.saveState();
     this.appendAudit('tamper-detected', evidence); this.appendAudit('quarantine-applied', { simulated: true, actual });
+    this.appendThreatFingerprint({
+      kind: 'threat-fingerprint', fingerprintId: crypto.randomUUID(),
+      payloadDigest: actual, commandPattern: attackClassification === 'RANSOMWARE_ENCRYPTION_ATTACK' ? 'ransomware-encryption' : 'integrity-tamper',
+      observedAt: this.clock(), durationMs: 0, ...threatMetrics
+    });
     this.state.antibodyPacket = signThreatAntibody({
       antibodyId: crypto.randomUUID(),
       sourceNode: this.name,
@@ -524,7 +616,16 @@ class SecurityNode {
       signatureVerified: verifyThreatAntibody(this.state.antibodyPacket, this.identity.publicKey)
     });
     this.saveState();
-    return { clean: false, quarantined: true, expected: evidence.expected, actual };
+    return { clean: false, quarantined: true, expected: evidence.expected, actual, ...threatMetrics };
+  }
+  appendThreatFingerprint(fingerprint, eventType = 'threat-fingerprint') {
+    const fingerprintSignature = sign(this.identity.privateKey, stable(fingerprint));
+    const auditRecord = this.appendAudit(eventType, { ...fingerprint, fingerprintSignature });
+    const filename = path.join(this.paths.quarantine, 'threat-fingerprint.json');
+    const fingerprints = readJson(filename, []);
+    fingerprints.push({ ...fingerprint, signature: fingerprintSignature, auditIndex: auditRecord.index });
+    writeJsonAtomic(filename, fingerprints.slice(-1000));
+    return auditRecord;
   }
   deceptionProbe(payload = {}, decoyResponse) {
     if (!this.state.quarantined || this.state.decoyState !== 'DECOY_HONEYPOT') throw new Error('node-not-in-deception-state');
@@ -535,20 +636,26 @@ class SecurityNode {
         : /(?:cat|type|read|file|path|\/etc)/i.test(raw) ? 'file-probing'
           : /(?:help|status|version|ping)/i.test(normalized) ? 'service-discovery'
             : 'unknown-command';
+    const threatMetrics = this.state.lastThreatMetrics || {
+      entropyScore: Number(calculateEntropy(Buffer.from(raw)).toFixed(4)),
+      sirBetaValue: 0.85,
+      sirGammaValue: 0.4,
+      predictedBlastRadius: 60,
+      predictedAffectedNodes: 1,
+      timeToImpactSeconds: 60,
+      attackClassification: 'INTEGRITY_TAMPER'
+    };
     const fingerprint = {
       kind: 'threat-fingerprint',
       fingerprintId: crypto.randomUUID(),
       payloadDigest: sha256(raw),
       commandPattern,
       observedAt: this.clock(),
-      durationMs: Number.isSafeInteger(payload.durationMs) ? Math.max(0, Math.min(payload.durationMs, 60000)) : 0
+      durationMs: Number.isSafeInteger(payload.durationMs) ? Math.max(0, Math.min(payload.durationMs, 60000)) : 0,
+      ...threatMetrics
     };
-    const fingerprintSignature = sign(this.identity.privateKey, stable(fingerprint));
-    const record = this.appendAudit('deception-probe', { ...fingerprint, fingerprintSignature });
-    const fingerprintFile = path.join(this.paths.quarantine, 'threat-fingerprint.json');
-    const fingerprints = readJson(fingerprintFile, []);
-    fingerprints.push({ ...fingerprint, signature: fingerprintSignature, auditIndex: record.index });
-    writeJsonAtomic(fingerprintFile, fingerprints.slice(-1000));
+    const record = this.appendThreatFingerprint(fingerprint, 'deception-probe');
+    const fingerprintSignature = record.details.fingerprintSignature;
     const response = typeof decoyResponse === 'string' && decoyResponse.length <= 2048 ? decoyResponse : /(?:help|status|version)/i.test(raw)
       ? 'service: edge-router\\nstatus: healthy\\nversion: 4.2.1'
       : 'error: unknown command\\ntry: help';
@@ -650,4 +757,4 @@ class SecurityNode {
   status() { return { name: this.name, nodePublicKeyFingerprint: sha256(this.identity.publicKey).slice(0, 16), mode: this.state.mode, quarantined: this.state.quarantined, decoyState: this.state.decoyState, shieldState: this.state.shieldState, lastPolicySequence: this.state.lastPolicySequence, trustedSnapshot: this.state.trustedSnapshot, currentDigest: this.digestProtected(), audit: this.verifyAudit() }; }
 }
 
-module.exports = { SecurityNode, sha256, stable, createAuthorities, authorityTrust, makePolicyUpdate, approvePolicy, validatePolicyApprovals, policyDigest, verify, verifyThreatAntibody, verifyWebAuthnAssertion, parseWebAuthnRegistration, executeDryRunSandbox, auditPrivacyLedger, verifySanitizedAuditEvidence, verifySanitizedAuditEvidenceWithTrust, verifySnapshotArtifact, readJson, writeJsonAtomic, SNAPSHOT_VERSION };
+module.exports = { SecurityNode, sha256, calculateEntropy, simulateSIR, stable, createAuthorities, authorityTrust, makePolicyUpdate, approvePolicy, validatePolicyApprovals, policyDigest, verify, verifyThreatAntibody, verifyWebAuthnAssertion, parseWebAuthnRegistration, executeDryRunSandbox, auditPrivacyLedger, verifySanitizedAuditEvidence, verifySanitizedAuditEvidenceWithTrust, verifySnapshotArtifact, readJson, writeJsonAtomic, SNAPSHOT_VERSION };

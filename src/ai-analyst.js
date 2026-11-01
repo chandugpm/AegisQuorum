@@ -1,4 +1,4 @@
-const { verifySanitizedAuditEvidence, simulateSIR } = require('./core');
+const { verifySanitizedAuditEvidence, calculateShannonEntropy, simulateSIR } = require('./core');
 
 const API_URL = 'https://api.meta.ai/v1/responses';
 const BASETEN_API_URL = 'https://inference.baseten.co/v1/chat/completions';
@@ -574,6 +574,8 @@ module.exports = {
   HONEYPOT_BASETEN_MODEL,
   ANALYSIS_SCHEMA,
   boundedEvidence,
+  calculateShannonEntropy,
+  simulateSIR,
   deterministicFallback,
   validateAnalysis,
   createIncidentAnalyst

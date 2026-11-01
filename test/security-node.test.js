@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { SecurityNode, createAuthorities, authorityTrust, makePolicyUpdate, approvePolicy, readJson, writeJsonAtomic, verify, verifyThreatAntibody, stable, calculateEntropy, simulateSIR } = require('../src/core');
+const { SecurityNode, AntibodyGenerator, generateGossipAntibody, createAuthorities, authorityTrust, makePolicyUpdate, approvePolicy, readJson, writeJsonAtomic, verify, verifyThreatAntibody, stable, calculateEntropy, calculateShannonEntropy, simulateSIR, sha256 } = require('../src/core');
 
 function fixture() { const root = fs.mkdtempSync(path.join(os.tmpdir(), 'danms-')); const authorities = createAuthorities(path.join(root, 'authorities')); const node = new SecurityNode({ directory: path.join(root, 'node'), name: 'test-node', trustedAuthorities: authorityTrust(authorities), clock: () => '2026-10-12T00:00:00.000Z' }); return { root, node, authorities }; }
 function policy(sequence = 1) { return makePolicyUpdate(sequence, { enforcement: 'observe-only' }, '2026-10-12T00:00:00.000Z'); }
@@ -69,6 +69,7 @@ test('Shannon entropy classifies encrypted tampering and SIR metrics are signed 
   const uniformBytes = Buffer.from(Array.from({ length: 2048 }, (_, index) => index % 256));
   assert.equal(calculateEntropy(Buffer.alloc(128)), 0);
   assert.equal(calculateEntropy(uniformBytes), 8);
+  assert.equal(calculateShannonEntropy(uniformBytes), 8);
   const sir = simulateSIR(0.85, 0.4, { population: 3 });
   assert.equal(sir.basicReproductionNumber, 2.125);
   assert.ok(sir.series.length > 1);
@@ -92,4 +93,20 @@ test('Shannon entropy classifies encrypted tampering and SIR metrics are signed 
   const auditFingerprint = f.node.audit.find(record => record.type === 'threat-fingerprint');
   assert.equal(auditFingerprint.details.sirBetaValue, 0.85);
   assert.equal(auditFingerprint.details.predictedBlastRadius, result.predictedBlastRadius);
+});
+
+test('AntibodyGenerator signs the requested packet shape with Ed25519', t => {
+  const f = fixture(); t.after(() => fs.rmSync(f.root, { recursive: true, force: true }));
+  const generator = new AntibodyGenerator({ privateKey: f.node.identity.privateKey, sourceNode: 'node-a', clock: () => 123456 });
+  const attackVector = Buffer.from('simulated-malware-vector');
+  const packet = generator.generateAntibody(attackVector);
+  assert.equal(packet.type, 'ANTIBODY');
+  assert.equal(packet.vector, sha256(attackVector));
+  assert.equal(packet.timestamp, 123456);
+  assert.equal(verifyThreatAntibody(packet, f.node.identity.publicKey), true);
+  assert.equal(verifyThreatAntibody({ ...packet, vector: '0'.repeat(64) }, f.node.identity.publicKey), false);
+  const helperPacket = generateGossipAntibody(attackVector, f.node.identity.privateKey, 'node-a', () => 654321);
+  assert.equal(helperPacket.type, 'ANTIBODY');
+  assert.equal(helperPacket.timestamp, 654321);
+  assert.equal(verifyThreatAntibody(helperPacket, f.node.identity.publicKey), true);
 });

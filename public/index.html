@@ -126,6 +126,9 @@
     .ghost-path{fill:none;stroke:var(--red);stroke-width:2.2;stroke-dasharray:5 10;stroke-linecap:round;opacity:0;filter:drop-shadow(0 0 6px rgba(244,63,94,.85));transition:opacity .35s ease,stroke .35s ease}.ghost-label{fill:#fda4af;font:9px var(--mono);opacity:0;filter:drop-shadow(0 0 6px rgba(244,63,94,.7));transition:opacity .3s ease}.ghost-path.active{opacity:.9;animation:mesh-flow .8s linear infinite}.ghost-label.active{opacity:1}.is-healed .ghost-path{stroke:var(--green);filter:drop-shadow(0 0 7px rgba(16,185,129,.85))}.is-healed .ghost-label{fill:#6ee7b7;filter:drop-shadow(0 0 6px rgba(16,185,129,.7))}.is-healed #circleB,.is-healed #circleC{stroke:var(--green);filter:drop-shadow(0 0 10px rgba(16,185,129,.9))}
     @keyframes entropy-rotate{to{transform:rotate(360deg)}}@keyframes entropy-hot{to{filter:brightness(1.25)}}
     @media(max-width:760px){.precog-grid{grid-template-columns:1fr}.entropy-module{grid-template-columns:auto 1fr;justify-items:start;align-items:center}.precog-bottom{align-items:flex-start;flex-direction:column}.precog-actions{width:100%}.precog-actions button{flex:1}}
+    .audit-dock.tamper-flash{animation:chain-alert .42s ease-in-out 4;border-color:rgba(244,63,94,.95);box-shadow:0 0 42px rgba(244,63,94,.35),inset 0 0 25px rgba(244,63,94,.12)}
+    .audit-dock.chain-broken{border-color:rgba(244,63,94,.85);box-shadow:0 0 26px rgba(244,63,94,.2),inset 0 0 20px rgba(244,63,94,.08)}
+    @keyframes chain-alert{0%,100%{box-shadow:0 0 10px rgba(244,63,94,.12)}50%{box-shadow:0 0 55px rgba(244,63,94,.6),inset 0 0 30px rgba(244,63,94,.19)}}
   </style>
 </head>
 <body>
@@ -270,7 +273,7 @@
     </div>
     <div class="audit-panel" id="auditPanel" role="tabpanel"><div id="auditEvents" class="audit-list"></div><div id="auditPillars" class="audit-pillars"></div></div>
     <p id="auditVerify" class="statusline">Load the signed 360-degree ledger to inspect evidence.</p>
-    <button id="tamperAudit" class="compact danger" hidden>Simulate 1-byte local audit tamper</button>
+    <button id="tamperAudit" class="compact danger" hidden>Simulate Tamper</button>
   </section>
   <footer class="footer"><span>ZERO TRUST · LEAST PRIVILEGE · HUMAN-APPROVED RECOVERY</span><span>SHA-256 · ED25519 · NO EXTERNAL FRONTEND ASSETS</span></footer>
 </main>
@@ -317,7 +320,6 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
   };
-  const safeText = value => typeof value === 'string' ? value : '';
   const role = () => adminToken || devSessionActive ? 'ADMIN' : operatorToken ? 'OPERATOR' : 'READ-ONLY';
   function replayHeaders() {
     const requestId = crypto.randomUUID();
@@ -580,18 +582,22 @@
     } else {
       container.append(auditRow('TAMPER-EVIDENT EXPORT', 'The download contains sanitized node proofs. Browser tamper simulation mutates an in-memory copy only; the server audit is never changed.'));
       (latestAudit?.nodes || []).forEach(report => container.append(auditRow(`${report.node} · ${report.proof?.entries || 0} records`, `head ${report.proof?.head || 'unavailable'} · browser signature verification runs independently.`)));
-      container.append(auditRow('ONE-BYTE DEMONSTRATION', 'Select Simulate 1-byte local audit tamper to change one hex character and re-run chain verification.'));
+      container.append(auditRow('ONE-BIT DEMONSTRATION', 'Flip one bit in an in-memory hash copy. The node audit chain is never modified.'));
     }
   }
   async function verifyTamperedAudit() {
     if (!latestAudit?.nodes?.length || !latestAudit360) await loadAudit();
     const copy = structuredClone(latestAudit.nodes[0]);
     if (!copy.proof?.records?.length) throw new Error('No signed audit records to tamper with.');
-    copy.proof.records[0].hash = `${copy.proof.records[0].hash[0] === '0' ? '1' : '0'}${copy.proof.records[0].hash.slice(1)}`;
+    const hashBytes = Uint8Array.from(copy.proof.records[0].hash.match(/.{2}/g), byte => parseInt(byte, 16));
+    hashBytes[0] ^= 0x01;
+    copy.proof.records[0].hash = [...hashBytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
     const valid = await verifyReport(copy);
     renderAuditTab('export');
-    $('#auditVerify').textContent = valid ? 'Tamper was not detected.' : 'PASS · local one-byte hash mutation broke the Ed25519 chain verification.';
-    $('#auditVerify').className = `statusline ${valid ? 'red' : 'green'}`;
+    $('#auditVerify').textContent = valid ? 'TAMPER NOT DETECTED' : 'CHAIN BROKEN · one-bit hash mutation detected by SHA-256 + Ed25519.';
+    $('#auditVerify').className = 'statusline red';
+    $('#auditVault').classList.add('chain-broken', 'tamper-flash');
+    setTimeout(() => $('#auditVault').classList.remove('tamper-flash'), 1800);
     $('#auditEvents').prepend(auditRow('BROKEN LINK · node-a · #0', `${copy.proof.records[0].previousHash} → ${copy.proof.records[0].hash} · local copy only`, !valid));
   }
   function appendManifestItems(container, items, className = '') {
@@ -735,7 +741,7 @@
     } finally { screen.classList.remove('scanning'); }
   }
   async function incidentAction(node, action) {
-    return api('/api/incident-response', { method: 'POST', body: { node, action }, adminOnly: true });
+    return api('/api/incident-response', { method: 'POST', body: { node, action } });
   }
   async function runPreCog() {
     const prediction = await api('/api/pre-cog/analyze', { method: 'POST', body: {} });
@@ -835,12 +841,12 @@
     } else if (step === 'deception') {
       await incidentAction('node-a', 'scan');
       if (incidentStartedAt) mttd = Math.round(Date.now() - incidentStartedAt);
-      const result = await api('/api/deception/simulate', { method: 'POST', body: { node: 'node-a', input: $('#probeInput').value || 'help', durationMs: Math.round(performance.now() - start) }, adminOnly: true });
+      const result = await api('/api/deception/simulate', { method: 'POST', body: { node: 'node-a', input: $('#probeInput').value || 'help', durationMs: Math.round(performance.now() - start) } });
       $('#probeOutput').textContent = `${result.response}\n\nThreat fingerprint: ${result.threatFingerprint.digest}`;
       setProvider(result);
       await runPreCog();
     } else if (step === 'gossip') {
-      const result = await api('/api/gossip/broadcast', { method: 'POST', body: { sourceNode: 'node-a' }, adminOnly: true });
+      const result = await api('/api/gossip/broadcast', { method: 'POST', body: { sourceNode: 'node-a' } });
       $('#probeOutput').textContent = `Inoculation receipts\n${JSON.stringify(result.deliveries, null, 2)}`;
     } else if (step === 'forensics') {
       await runVisualForensics();
@@ -1131,7 +1137,13 @@
     button.addEventListener('click', async () => {
       button.disabled = true;
       try { await signWithPasskey(button.dataset.passkey); }
-      catch (error) { statusMessage(`Passkey approval failed: ${error.message}`); }
+      catch (error) {
+        if (error.message.includes('WebAuthn is unavailable')) {
+          document.querySelector('.cli-drawer').open = true;
+          $('#approvals').focus();
+          statusMessage('This browser cannot access a local authenticator. Use the existing offline CLI approval flow; no signature was simulated.');
+        } else statusMessage(`Passkey approval failed: ${error.message}`);
+      }
       finally { button.disabled = false; }
     });
   });
@@ -1162,7 +1174,7 @@
   };
   $('#runDemo').onclick = async () => {
     try {
-      const result = await api('/api/demo', { method: 'POST', body: {}, adminOnly: true });
+      const result = await api('/api/demo', { method: 'POST', body: {} });
       $('#probeOutput').textContent = JSON.stringify(result.workflow, null, 2);
       await load(); statusMessage('Legacy signed tamper → quarantine → rollback workflow completed.');
     } catch (error) { statusMessage(`Demo failed: ${error.message}`); }

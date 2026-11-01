@@ -75,6 +75,8 @@ test('dashboard reports sanitized live state and executes the authenticated real
   assert.ok(page.body.includes('id="preCogOutput"') && page.body.includes('id="sirTiming"'));
   assert.ok(page.body.includes('id="runPreCog"') && page.body.includes('id="voiceC2"'));
   assert.ok(page.body.includes('id="authorizeHealing"') && page.body.includes('patchExecution'));
+  assert.ok(page.body.includes('Simulate Tamper') && page.body.includes('hashBytes[0] ^= 0x01'));
+  assert.ok(page.body.includes('CHAIN BROKEN'));
   assert.ok(page.body.includes('dI/dt = βSI/N − γI') && page.body.includes('id="ghostAB"'));
 
   const deniedPolicy = await requestJson(`${f.base}/api/policy`, { method: 'POST', body: { payload: { enforcement: 'observe-only' } } });

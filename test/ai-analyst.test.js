@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { SecurityNode, createAuthorities, authorityTrust } = require('../src/core');
-const { API_URL, BASETEN_API_URL, HONEYPOT_BASETEN_MODEL, boundedEvidence, createIncidentAnalyst } = require('../src/ai-analyst');
+const { API_URL, BASETEN_API_URL, HONEYPOT_BASETEN_MODEL, boundedEvidence, calculateShannonEntropy, simulateSIR, createIncidentAnalyst } = require('../src/ai-analyst');
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'danms-analyst-'));
@@ -261,6 +261,8 @@ test('Baseten visual providers receive multimodal payloads and validate segmenta
 });
 
 test('pre-cog prediction supplies exact SIR metrics, bounds victims, and treats patch code as advisory', async () => {
+  assert.equal(calculateShannonEntropy(Buffer.from(Array.from({ length: 256 }, (_, index) => index))), 8);
+  assert.equal(simulateSIR(.85, .4).basicReproductionNumber, 2.125);
   let request;
   const analyst = createIncidentAnalyst({
     apiKey: 'test-meta-key', basetenApiKey: '',

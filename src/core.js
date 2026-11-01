@@ -50,6 +50,7 @@ function simulateSIR(beta = 0.85, gamma = 0.4, { population = 3, initialInfected
       timeToSaturationSeconds = Number(timeSeconds.toFixed(2));
     }
     if (step === steps) break;
+    // Euler-integrate dS/dt=-βSI/N, dI/dt=βSI/N−γI, dR/dt=γI; β models peer spread and γ models antibody recovery.
     const infectedDelta = (infectionRate - recoveryRate) * timeStep;
     const susceptibleDelta = -infectionRate * timeStep;
     const recoveredDelta = recoveryRate * timeStep;
@@ -75,6 +76,7 @@ function simulateSIR(beta = 0.85, gamma = 0.4, { population = 3, initialInfected
     series
   };
 }
+const calculateShannonEntropy = calculateEntropy;
 const stable = (value) => {
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
   if (value && typeof value === 'object') return `{${Object.keys(value).sort().map(k => `${JSON.stringify(k)}:${stable(value[k])}`).join(',')}}`;
@@ -240,9 +242,47 @@ function signThreatAntibody(packet, privateKey) {
   const { signature, ...unsigned } = packet;
   return { ...unsigned, signature: sign(privateKey, stable(unsigned)) };
 }
+class AntibodyGenerator {
+  constructor({ privateKey, sourceNode, clock = Date.now }) {
+    if (typeof privateKey !== 'string' || typeof sourceNode !== 'string' || !/^[A-Za-z0-9-]{1,64}$/.test(sourceNode) || typeof clock !== 'function') {
+      throw new Error('antibody-generator-configuration-invalid');
+    }
+    this.privateKey = privateKey;
+    this.sourceNode = sourceNode;
+    this.clock = clock;
+  }
+  generateAntibody(attackVector) {
+    const vector = typeof attackVector === 'string' && /^[a-f0-9]{64}$/i.test(attackVector)
+      ? attackVector.toLowerCase()
+      : sha256(Buffer.isBuffer(attackVector) ? attackVector : Buffer.from(String(attackVector ?? '')));
+    const timestamp = this.clock();
+    const packet = {
+      type: 'ANTIBODY',
+      vector,
+      timestamp,
+      antibodyId: crypto.randomUUID(),
+      sourceNode: this.sourceNode,
+      attackVectorHash: vector,
+      elevatedRateLimit: true,
+      blockedSignatures: [vector],
+      issuedAt: new Date(timestamp).toISOString()
+    };
+    return signThreatAntibody(packet, this.privateKey);
+  }
+}
+function generateGossipAntibody(attackVector, privateKey, sourceNode, clock = Date.now) {
+  if (attackVector && typeof attackVector === 'object' && !Buffer.isBuffer(attackVector) && privateKey === undefined) {
+    const options = attackVector;
+    return new AntibodyGenerator({ privateKey: options.privateKey, sourceNode: options.sourceNode, clock: options.clock || Date.now })
+      .generateAntibody(options.attackVector);
+  }
+  return new AntibodyGenerator({ privateKey, sourceNode, clock }).generateAntibody(attackVector);
+}
 function verifyThreatAntibody(packet, publicKey) {
   if (!packet || typeof packet !== 'object' || typeof packet.sourceNode !== 'string' ||
       !/^[a-zA-Z0-9-]{1,64}$/.test(packet.sourceNode) ||
+      packet.type !== 'ANTIBODY' || typeof packet.vector !== 'string' || packet.vector !== packet.attackVectorHash ||
+      !/^[a-f0-9]{64}$/.test(packet.vector) || !Number.isSafeInteger(packet.timestamp) ||
   typeof packet.antibodyId !== 'string' || !/^[A-Za-z0-9-]{1,128}$/.test(packet.antibodyId) ||
       typeof packet.attackVectorHash !== 'string' || !/^[a-f0-9]{64}$/.test(packet.attackVectorHash) ||
       packet.elevatedRateLimit !== true || !Array.isArray(packet.blockedSignatures) ||
@@ -452,10 +492,12 @@ class SecurityNode {
     };
     ensureDirectory(directory); ensureDirectory(this.paths.snapshots); ensureDirectory(this.paths.quarantine);
     this.identity = createIdentity(directory, name);
+    this.antibodyGenerator = new AntibodyGenerator({ privateKey: this.identity.privateKey, sourceNode: name });
     if (!fs.existsSync(this.paths.protected)) writeJsonAtomic(this.paths.protected, { node: name, routing: 'normal', revision: 1 });
     this.state = readJson(this.paths.state, { lastPolicySequence: 0, mode: 'trusted', quarantined: false, decoyState: null, shieldState: 'normal', trustedSnapshot: null, policy: null });
     this.state.decoyState ||= null;
     this.state.shieldState ||= 'normal';
+    this.state.blockList ||= [];
     this.state.webauthnAuthorities ||= {};
     this.audit = readJson(this.paths.audit, []);
     if (!this.state.trustedSnapshot) this.createTrustedSnapshot('initial-baseline');
@@ -602,14 +644,7 @@ class SecurityNode {
       payloadDigest: actual, commandPattern: attackClassification === 'RANSOMWARE_ENCRYPTION_ATTACK' ? 'ransomware-encryption' : 'integrity-tamper',
       observedAt: this.clock(), durationMs: 0, ...threatMetrics
     });
-    this.state.antibodyPacket = signThreatAntibody({
-      antibodyId: crypto.randomUUID(),
-      sourceNode: this.name,
-      attackVectorHash: actual,
-      elevatedRateLimit: true,
-      blockedSignatures: [actual],
-      issuedAt: this.clock()
-    }, this.identity.privateKey);
+    this.state.antibodyPacket = this.antibodyGenerator.generateAntibody(actual);
     this.appendAudit('threat-antibody-created', {
       attackVectorHash: actual,
       blockedSignatureCount: 1,
@@ -663,20 +698,21 @@ class SecurityNode {
   }
   inoculate(packet, sourcePublicKey) {
     if (!verifyThreatAntibody(packet, sourcePublicKey)) throw new Error('threat-antibody-invalid');
+    this.state.blockList = [...new Set([...(this.state.blockList || []), packet.vector, ...packet.blockedSignatures])].slice(-256);
     this.state.shieldState = 'INOCULATED_SHIELD';
-    this.state.shieldAttackVectorHash = packet.attackVectorHash;
+    this.state.shieldAttackVectorHash = packet.vector;
     this.state.rateLimitPosture = 'elevated';
     this.saveState();
     this.appendAudit('gossip-inoculated', {
       sourceNode: packet.sourceNode,
-      attackVectorHash: packet.attackVectorHash,
+      attackVectorHash: packet.vector,
       signatureVerified: true
     });
     const receipt = {
       receiptId: crypto.randomUUID(),
       node: this.name,
       antibodyId: packet.antibodyId,
-      attackVectorHash: packet.attackVectorHash,
+      attackVectorHash: packet.vector,
       posture: this.state.shieldState,
       issuedAt: this.clock()
     };
@@ -757,4 +793,4 @@ class SecurityNode {
   status() { return { name: this.name, nodePublicKeyFingerprint: sha256(this.identity.publicKey).slice(0, 16), mode: this.state.mode, quarantined: this.state.quarantined, decoyState: this.state.decoyState, shieldState: this.state.shieldState, lastPolicySequence: this.state.lastPolicySequence, trustedSnapshot: this.state.trustedSnapshot, currentDigest: this.digestProtected(), audit: this.verifyAudit() }; }
 }
 
-module.exports = { SecurityNode, sha256, calculateEntropy, simulateSIR, stable, createAuthorities, authorityTrust, makePolicyUpdate, approvePolicy, validatePolicyApprovals, policyDigest, verify, verifyThreatAntibody, verifyWebAuthnAssertion, parseWebAuthnRegistration, executeDryRunSandbox, auditPrivacyLedger, verifySanitizedAuditEvidence, verifySanitizedAuditEvidenceWithTrust, verifySnapshotArtifact, readJson, writeJsonAtomic, SNAPSHOT_VERSION };
+module.exports = { SecurityNode, AntibodyGenerator, generateGossipAntibody, sha256, calculateEntropy, calculateShannonEntropy, simulateSIR, stable, createAuthorities, authorityTrust, makePolicyUpdate, approvePolicy, validatePolicyApprovals, policyDigest, verify, verifyThreatAntibody, verifyWebAuthnAssertion, parseWebAuthnRegistration, executeDryRunSandbox, auditPrivacyLedger, verifySanitizedAuditEvidence, verifySanitizedAuditEvidenceWithTrust, verifySnapshotArtifact, readJson, writeJsonAtomic, SNAPSHOT_VERSION };

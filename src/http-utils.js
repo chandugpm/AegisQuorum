@@ -12,14 +12,16 @@ class ReplayCache {
   }
 }
 
-function requestSecurity(request, replayCache, { required = false } = {}) {
+function requestSecurity(request, replayCache, { required = false, maxAgeMs = Number(process.env.REQUEST_MAX_AGE_MS || 30000) } = {}) {
+  if (!Number.isSafeInteger(maxAgeMs) || maxAgeMs < 1000) throw new RequestError('request-max-age-invalid');
+  const freshnessWindowMs = Math.min(maxAgeMs, 30000);
   const id = request.headers['x-request-id']; const rawTimestamp = request.headers['x-request-timestamp'];
   if (id === undefined && rawTimestamp === undefined) {
     if (required) throw new RequestError('replay-protection-required');
     return { checked: false };
   }
   const timestamp = Number(rawTimestamp);
-  if (!Number.isSafeInteger(timestamp) || Math.abs(Date.now() - timestamp) > 300000) throw new RequestError('stale-request');
+  if (!Number.isSafeInteger(timestamp) || Math.abs(Date.now() - timestamp) > freshnessWindowMs) throw new RequestError('stale-request');
   if (!replayCache?.accept(id, timestamp)) throw new RequestError('replayed-request');
   return { checked: true, id, timestamp };
 }

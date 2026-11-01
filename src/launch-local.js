@@ -21,7 +21,7 @@ function launchLocal({ environment = process.env, logger = console } = {}) {
   const { serviceToken, adminToken } = resolveRuntimeTokens({ environment, root });
   initializeAuthorityTrust({ authorityDirectory, trustFile, environment });
   const ports = [7101, 7102, 7103]; const names = ['node-a', 'node-b', 'node-c']; const urls = ports.map(port => `http://127.0.0.1:${port}`);
-  const children = names.map((name, i) => fork(path.join(__dirname, 'node-service.js'), [], { env: createNodeEnvironment(environment, { NODE_DATA_DIR: path.join(root, 'nodes', name), NODE_NAME: name, AUTHORITY_FILE: trustFile, PORT: String(ports[i]), HOST: '127.0.0.1', NODE_SERVICE_TOKEN: serviceToken }) }));
+  const children = names.map((name, i) => fork(path.join(__dirname, 'node-service.js'), [], { env: createNodeEnvironment(environment, { NODE_DATA_DIR: path.join(root, 'nodes', name), NODE_NAME: name, AUTHORITY_FILE: trustFile, PORT: String(ports[i]), HOST: '127.0.0.1', NODE_SERVICE_TOKEN: serviceToken, PEER_NODE_URLS: urls.filter((_, peerIndex) => peerIndex !== i).join(',') }) }));
   const dashboard = startDashboard({ port: resolveDashboardPort(environment), nodeUrls: urls, authorityDirectory, authorityTrustFile: trustFile, serviceToken, adminToken, operatorToken: environment.DASHBOARD_OPERATOR_TOKEN || undefined, quorum: Number(environment.POLICY_QUORUM || 2), host: environment.DASHBOARD_HOST || '127.0.0.1' });
   let stopping = false;
   const stop = () => { if (stopping) return; stopping = true; dashboard.close(); for (const child of children) child.kill('SIGTERM'); };

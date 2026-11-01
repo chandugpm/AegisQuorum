@@ -12,7 +12,7 @@ This submission extends a three-node security-management scaffold with auditable
 | Ed25519 2-of-3 policy approvals, SHA-256 integrity monitoring, signed snapshots, quarantine, and verified rollback | Verified-event policy synthesis with an Ed25519-signed 50-event dry-run certificate |
 | Replay-protected APIs and signed, sanitized audit chains | WebAuthn passkey registration/assertion paths for authority approvals |
 | Deterministic analyst fallback and Meta API incident analysis | Visual/voice privacy forensics, verified-event correlation, cross-node gossip antibodies/receipts, and the 360-degree audit endpoint |
-|  | **Feature 6: Bio-Digital Predictive Engine (SIR + Entropy)** with Shannon entropy classification, a bounded three-node SIR projection, verified-event Muse Spark predictions, and quorum-gated containment proposals |
+|  | **Feature 6: Bio-Digital Predictive Engine (SIR + Entropy)** with Shannon entropy classification, a bounded three-node SIR projection, verified-event Muse Spark predictions, automatically gossiped Ed25519 antibodies, 30-second replay freshness, and quorum-gated containment proposals |
 
 The structured version is available at `GET /api/hackathon-manifest`.
 

@@ -38,6 +38,10 @@
     .ring-value{position:relative;z-index:1;font:600 11px var(--mono);color:var(--text);text-align:center}
     .ring-copy{min-width:0}.ring-copy strong{display:block;font:10px var(--mono);letter-spacing:.045em;text-transform:uppercase}.ring-copy small{display:block;margin-top:3px;color:var(--muted);font-size:9px}
     .top-actions .demo-auth{border-color:rgba(16,185,129,.45);color:#6ee7b7;background:rgba(16,185,129,.07)}
+    .rec-indicator{display:inline-flex;align-items:center;gap:6px;color:#f43f5e;font:700 11px var(--mono);letter-spacing:.08em;animation:rec-blink 1.2s steps(2) infinite}
+    .rec-indicator[hidden]{display:none}
+    .rec-indicator b{color:#fda4af}
+    @keyframes rec-blink{50%{opacity:.25}}
     .topology-wrap{min-height:290px;background:radial-gradient(ellipse at 38% 38%,rgba(6,182,212,.08),transparent 42%),linear-gradient(180deg,rgba(5,12,22,.86),rgba(7,14,24,.94))}
     .topology{height:290px;filter:drop-shadow(0 0 10px rgba(6,182,212,.08))}
     .radar-sweep{fill:url(#radarFill);stroke:rgba(245,158,11,.75);stroke-width:1;opacity:0;transform-origin:170px 66px}
@@ -146,6 +150,7 @@
         <button class="demo-auth compact" id="demoAutoAuth" title="Creates a short-lived HttpOnly local development session; the admin token is never returned">1-Click Load Dev Admin Token</button>
         <button class="manifest-button compact" id="manifestOpen">Rule-4 Inspector</button>
         <button class="tour-button compact" id="tourStart">Start 3-Min Video Tour</button>
+        <span class="rec-indicator" id="recIndicator" hidden>🔴 REC <b id="recTimer">00:00</b></span>
         <button id="credentialToggle" class="compact">Credential vault</button>
       </div>
     </div>
@@ -308,6 +313,9 @@
   let cancelTourWait = () => {};
   let mediaRecorder = null;
   let recordingChunks = [];
+  let recordingStartedAt = 0;
+  let recordingTimer = 0;
+  let recordingStopAuthorized = false;
   let latestPreCog = null;
   const $ = selector => document.querySelector(selector);
   let toastTimer = 0;
@@ -999,26 +1007,65 @@
     });
   }
   function waitUntilTourTime(milliseconds) { return waitTour(Math.max(0, tourStartAt + milliseconds - Date.now())); }
+  function recorderMimeType() {
+    return ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(type => MediaRecorder.isTypeSupported(type)) || '';
+  }
+  function updateRecordingTimer() {
+    const elapsed = Math.max(0, Date.now() - recordingStartedAt);
+    const minutes = String(Math.floor(elapsed / 60000)).padStart(2, '0');
+    const seconds = String(Math.floor(elapsed / 1000) % 60).padStart(2, '0');
+    $('#recTimer').textContent = `${minutes}:${seconds}`;
+  }
+  function showRecordingIndicator() {
+    $('#recIndicator').hidden = false;
+    updateRecordingTimer();
+    recordingTimer = setInterval(updateRecordingTimer, 1000);
+  }
+  function hideRecordingIndicator() {
+    clearInterval(recordingTimer); recordingTimer = 0;
+    $('#recIndicator').hidden = true;
+  }
   async function startScreenRecording() {
     if (!navigator.mediaDevices?.getDisplayMedia || !window.MediaRecorder) throw new Error('Screen recording is not supported by this browser.');
-    const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false });
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+      audio: false
+    });
     recordingChunks = [];
-    mediaRecorder = new MediaRecorder(stream);
-    mediaRecorder.ondataavailable = event => { if (event.data.size) recordingChunks.push(event.data); };
+    recordingStopAuthorized = false;
+    const mimeType = recorderMimeType();
+    mediaRecorder = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 5000000 });
+    mediaRecorder.ondataavailable = event => { if (event.data && event.data.size) recordingChunks.push(event.data); };
+    mediaRecorder.onerror = () => { recordingStopAuthorized = true; statusMessage('Recorder error: saving captured footage.'); };
     mediaRecorder.onstop = () => {
-      const blob = new Blob(recordingChunks, { type: mediaRecorder.mimeType || 'video/webm' });
+      const authorized = recordingStopAuthorized;
+      recordingStopAuthorized = false;
+      stream.getTracks().forEach(track => track.stop());
+      hideRecordingIndicator();
+      const chunks = recordingChunks;
+      recordingChunks = [];
+      const type = mediaRecorder.mimeType || 'video/webm';
+      mediaRecorder = null;
+      if (!authorized || !chunks.length) return;
+      const blob = new Blob(chunks, { type });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob); link.download = 'zero-trust-command-tour.webm'; link.click();
       setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-      stream.getTracks().forEach(track => track.stop());
     };
     mediaRecorder.start(1000);
+    recordingStartedAt = Date.now();
+    showRecordingIndicator();
+  }
+  function stopRecording() {
+    if (!mediaRecorder) return;
+    recordingStopAuthorized = true;
+    if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
   }
   function stopTour() {
     tourActive = false;
     cancelTourWait();
     if (window.speechSynthesis) window.speechSynthesis.cancel();
-    if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
+    stopRecording();
     $('#directorState').textContent = 'DIRECTOR · STANDBY';
     $('#directorState').style.color = '';
     $('#teleprompter').classList.remove('active');

@@ -42,7 +42,7 @@ function sanitizeForensicTranscript(value) {
     .replace(/(?:[A-Za-z]:\\|\/)[^\s,;]+/g, '[REDACTED_PATH]');
 }
 
-function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDirectory, authorityTrustFile, serviceToken, adminToken, operatorToken = process.env.DASHBOARD_OPERATOR_TOKEN || undefined, quorum = Number(process.env.POLICY_QUORUM || 2), staticDirectory = path.join(__dirname, '..', 'public'), logger = console, rateLimiter = createRateLimiter(), incidentRateLimiter = createRateLimiter({ perClientLimit: 5, globalLimit: 30 }), replayCache = new ReplayCache(), metrics = createMetrics(), incidentAnalyst = createIncidentAnalyst() }) {
+function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDirectory, authorityTrustFile, serviceToken, adminToken, operatorToken = process.env.DASHBOARD_OPERATOR_TOKEN || undefined, quorum = Number(process.env.POLICY_QUORUM || 2), staticDirectory = path.join(__dirname, '..', 'public'), logger = console, rateLimiter = createRateLimiter(), incidentRateLimiter = createRateLimiter({ perClientLimit: 5, globalLimit: 30 }), replayCache = new ReplayCache(), metrics = createMetrics(), incidentAnalyst = createIncidentAnalyst(), nodeTransport }) {
   if (operatorToken === '') operatorToken = undefined;
   if (!validToken(adminToken) || !validToken(serviceToken) || (operatorToken !== undefined && !validToken(operatorToken))) throw new Error('dashboard, operator, and service tokens must be non-whitespace tokens of at least 32 characters');
   if (!Array.isArray(nodeUrls) || nodeUrls.length === 0) throw new Error('at least one node URL is required');
@@ -54,9 +54,13 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
   const webauthnAuthorities = readJson(webauthnTrustFile, {});
   const webauthnChallenges = new Map();
   const developmentSessions = new Map();
-  const statuses = () => Promise.all(nodeUrls.map(async (url, index) => { try { return sanitizeNodeStatus((await requestJson(`${url}/status`)).body, `node-${String.fromCharCode(97 + index)}`); } catch { return { name: `node-${String.fromCharCode(97 + index)}`, mode: 'offline', error: 'unavailable' }; } }));
-  const auditReports = () => Promise.all(nodeUrls.map(async (url, index) => { try { const result = await requestJson(`${url}/audit`); return result.status === 200 ? result.body : { node: `node-${String.fromCharCode(97 + index)}`, verification: { valid: false }, events: [] }; } catch { return { node: `node-${String.fromCharCode(97 + index)}`, verification: { valid: false }, events: [] }; } }));
-  const commandAll = (endpoint, payload, security) => Promise.all(nodeUrls.map(url => requestJson(`${url}${endpoint}`, 'POST', payload, serviceToken, security).catch(() => ({ status: 503, body: {} }))));
+  const nodeRequest = (index, route, { method = 'GET', payload, security } = {}) => {
+    if (nodeTransport) return nodeTransport(index, route, { method, payload, security });
+    return requestJson(`${nodeUrls[index]}${route}`, method, payload, serviceToken, security);
+  };
+  const statuses = () => Promise.all(nodeUrls.map(async (url, index) => { try { return sanitizeNodeStatus((await nodeRequest(index, '/status')).body, `node-${String.fromCharCode(97 + index)}`); } catch { return { name: `node-${String.fromCharCode(97 + index)}`, mode: 'offline', error: 'unavailable' }; } }));
+  const auditReports = () => Promise.all(nodeUrls.map(async (url, index) => { try { const result = await nodeRequest(index, '/audit'); return result.status === 200 ? result.body : { node: `node-${String.fromCharCode(97 + index)}`, verification: { valid: false }, events: [] }; } catch { return { node: `node-${String.fromCharCode(97 + index)}`, verification: { valid: false }, events: [] }; } }));
+  const commandAll = (endpoint, payload, security) => Promise.all(nodeUrls.map((url, index) => nodeRequest(index, endpoint, { method: 'POST', payload, security }).catch(() => ({ status: 503, body: {} }))));
   const securityEvents = [];
   const visualForensicsLedger = [];
   const gossipReceipts = [];
@@ -325,12 +329,12 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         if (existing && (existing.credentialId !== credential.credentialId || existing.publicKey !== credential.publicKey)) {
           return json(response, 409, { error: 'authority-passkey-already-registered' });
         }
-        const registrations = await Promise.all(nodeUrls.map((nodeUrl, index) => requestJson(`${nodeUrl}/webauthn/authority`, 'POST', {
+        const registrations = await Promise.all(nodeUrls.map((nodeUrl, index) => nodeRequest(index, '/webauthn/authority', { method: 'POST', payload: {
           authority: input.authority, credential
-        }, serviceToken, {
+        }, security: {
           id: `${crypto.createHash('sha256').update(`${security.id}:${index}`).digest('hex').slice(0, 32)}:webauthn-register`,
           timestamp: security.timestamp
-        }).catch(() => ({ status: 503, body: {} }))));
+        } }).catch(() => ({ status: 503, body: {} }))));
         if (registrations.some(result => result.status !== 200)) return json(response, 503, { error: 'webauthn-trust-propagation-failed' });
         webauthnAuthorities[input.authority] = credential;
         writeJsonAtomic(webauthnTrustFile, webauthnAuthorities);
@@ -365,9 +369,9 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
             typeof input.input !== 'string' || input.input.length > 512) return json(response, 400, { error: 'invalid-deception-probe' });
         const index = input.node.charCodeAt(input.node.length - 1) - 97;
         if (index >= nodeUrls.length) return json(response, 404, { error: 'node-not-found' });
-        const result = await requestJson(`${nodeUrls[index]}/deception-probe`, 'POST', { input: input.input, durationMs: input.durationMs }, serviceToken, {
+        const result = await nodeRequest(index, '/deception-probe', { method: 'POST', payload: { input: input.input, durationMs: input.durationMs }, security: {
           id: `${crypto.createHash('sha256').update(security.id).digest('hex').slice(0, 32)}:deception`, timestamp: security.timestamp
-        }).catch(() => ({ status: 503, body: {} }));
+        } }).catch(() => ({ status: 503, body: {} }));
         if (result.status !== 200) return json(response, result.status === 400 ? 409 : 503, { error: result.body.error || 'deception-probe-failed' });
         const reports = await auditReports();
         const report = reports[index];
@@ -403,11 +407,11 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         const analysis = await incidentAnalyst.analyze({ statuses: nodeStatuses, reports: verifiedReports });
         const target = nodeUrls.findIndex((_, index) => nodeStatuses[index]?.mode === 'trusted');
         if (target < 0) return json(response, 409, { error: 'no-trusted-node-for-sandbox' });
-        const result = await requestJson(`${nodeUrls[target]}/dry-run`, 'POST', {
+        const result = await nodeRequest(target, '/dry-run', { method: 'POST', payload: {
           candidatePolicy: update
-        }, serviceToken, {
+        }, security: {
           id: `${crypto.createHash('sha256').update(security.id).digest('hex').slice(0, 32)}:dry-run`, timestamp: security.timestamp
-        }).catch(() => ({ status: 503, body: {} }));
+        } }).catch(() => ({ status: 503, body: {} }));
         if (result.status !== 200) return json(response, 503, { error: 'sandbox-unavailable' });
         const sandbox = result.body;
         const { signature: sandboxSignature, ...unsigned } = sandbox;
@@ -464,14 +468,14 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         if (typeof sourceName !== 'string' || !/^node-[a-c]$/.test(sourceName)) return json(response, 409, { error: 'quarantined-source-node-required' });
         const sourceIndex = sourceName.charCodeAt(sourceName.length - 1) - 97;
         if (sourceIndex >= nodeUrls.length || !deceptionActive(allStatuses[sourceIndex])) return json(response, 409, { error: 'source-node-not-quarantined' });
-        const source = await requestJson(`${nodeUrls[sourceIndex]}/threat-antibody`, 'GET', undefined, serviceToken).catch(() => ({ status: 503, body: {} }));
+        const source = await nodeRequest(sourceIndex, '/threat-antibody').catch(() => ({ status: 503, body: {} }));
         if (source.status !== 200) return json(response, 503, { error: 'threat-antibody-unavailable' });
         const deliveries = await Promise.all(nodeUrls.map(async (nodeUrl, index) => {
           if (index === sourceIndex) return { node: `node-${String.fromCharCode(97 + index)}`, inoculated: false, reason: 'source-node' };
           if (allStatuses[index]?.mode !== 'trusted') return { node: `node-${String.fromCharCode(97 + index)}`, inoculated: false, reason: 'peer-not-eligible' };
-          const result = await requestJson(`${nodeUrl}/gossip/inoculate`, 'POST', source.body, serviceToken, {
+          const result = await nodeRequest(index, '/gossip/inoculate', { method: 'POST', payload: source.body, security: {
             id: `${crypto.createHash('sha256').update(`${security.id}:${index}`).digest('hex').slice(0, 32)}:inoculate`, timestamp: security.timestamp
-          }).catch(() => ({ status: 503, body: {} }));
+          } }).catch(() => ({ status: 503, body: {} }));
           const receipt = result.body?.receipt;
           if (result.status === 200 && result.body.inoculated === true && receipt) {
             const peerReports = await auditReports();
@@ -569,16 +573,15 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         if (typeof input.node !== 'string' || !/^node-[a-c]$/.test(input.node) || !['tamper', 'scan', 'verify-snapshot', 'recover'].includes(input.action)) return json(response, 400, { error: 'invalid-incident-response' });
         const index = input.node.charCodeAt(input.node.length - 1) - 97;
         if (index >= nodeUrls.length) return json(response, 404, { error: 'node-not-found' });
-        const nodeUrl = nodeUrls[index];
         const downstream = stage => ({ id: `${crypto.createHash('sha256').update(security.id).digest('hex').slice(0, 32)}:${stage}`, timestamp: security.timestamp });
         if (input.action === 'tamper') {
-          const result = await requestJson(`${nodeUrl}/simulate-tamper`, 'POST', {}, serviceToken, downstream('incident-tamper')).catch(() => ({ status: 503, body: {} }));
+          const result = await nodeRequest(index, '/simulate-tamper', { method: 'POST', payload: {}, security: downstream('incident-tamper') }).catch(() => ({ status: 503, body: {} }));
           return json(response, result.status === 200 ? 200 : 503, result.status === 200
             ? { node: input.node, action: 'tamper', operationStatus: 'simulated', tampered: result.body.tampered === true }
             : { node: input.node, action: 'tamper', operationStatus: 'failed', error: 'node-unavailable' });
         }
         if (input.action === 'verify-snapshot') {
-          const snapshot = await requestJson(`${nodeUrl}/snapshot`).catch(() => ({ status: 503, body: {} }));
+          const snapshot = await nodeRequest(index, '/snapshot').catch(() => ({ status: 503, body: {} }));
           if (snapshot.status !== 200) return json(response, 503, { node: input.node, action: 'verify-snapshot', operationStatus: 'failed', error: 'node-unavailable' });
           return json(response, snapshot.body.valid === true ? 200 : 409, {
             node: input.node, action: 'verify-snapshot',
@@ -587,7 +590,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
           });
         }
         if (input.action === 'scan') {
-          const result = await requestJson(`${nodeUrl}/scan`, 'POST', {}, serviceToken, downstream('incident-scan')).catch(() => ({ status: 503, body: {} }));
+          const result = await nodeRequest(index, '/scan', { method: 'POST', payload: {}, security: downstream('incident-scan') }).catch(() => ({ status: 503, body: {} }));
           if (result.status !== 200) return json(response, 503, { node: input.node, action: 'scan', operationStatus: 'failed', error: 'node-unavailable' });
           return json(response, 200, {
             node: input.node,
@@ -598,14 +601,14 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
             safeMode: Boolean(result.body.safeMode)
           });
         }
-        const current = await requestJson(`${nodeUrl}/status`).catch(() => ({ status: 503, body: {} }));
+        const current = await nodeRequest(index, '/status').catch(() => ({ status: 503, body: {} }));
         if (current.status !== 200) return json(response, 503, { node: input.node, action: 'recover', operationStatus: 'failed', error: 'node-unavailable' });
         if (current.body.quarantined !== true) return json(response, 409, { node: input.node, action: 'recover', operationStatus: 'rejected', error: 'node-not-quarantined' });
-        const snapshot = await requestJson(`${nodeUrl}/snapshot`).catch(() => ({ status: 503, body: {} }));
+        const snapshot = await nodeRequest(index, '/snapshot').catch(() => ({ status: 503, body: {} }));
         if (snapshot.status !== 200 || snapshot.body.valid !== true) return json(response, 409, { node: input.node, action: 'recover', operationStatus: 'rejected', error: 'trusted-snapshot-invalid' });
-        const restored = await requestJson(`${nodeUrl}/rollback`, 'POST', {}, serviceToken, downstream('incident-recovery')).catch(() => ({ status: 503, body: {} }));
+        const restored = await nodeRequest(index, '/rollback', { method: 'POST', payload: {}, security: downstream('incident-recovery') }).catch(() => ({ status: 503, body: {} }));
         if (restored.status !== 200 || restored.body.restored !== true) return json(response, 503, { node: input.node, action: 'recover', operationStatus: 'failed', error: restored.body.reason || 'recovery-failed' });
-        const verification = await requestJson(`${nodeUrl}/scan`, 'POST', {}, serviceToken, downstream('incident-post-recovery-scan')).catch(() => ({ status: 503, body: {} }));
+        const verification = await nodeRequest(index, '/scan', { method: 'POST', payload: {}, security: downstream('incident-post-recovery-scan') }).catch(() => ({ status: 503, body: {} }));
         if (verification.status !== 200 || verification.body.clean !== true) return json(response, 503, { node: input.node, action: 'recover', operationStatus: 'post-recovery-check-failed', restored: true, postRecoveryVerified: false });
         return json(response, 200, { node: input.node, action: 'recover', operationStatus: 'verified', restored: true, postRecoveryVerified: true, digest: verification.body.digest });
       }
@@ -624,7 +627,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
       }
       if (route === '/api/demo') {
         const downstream = stage => ({ id: `${crypto.createHash('sha256').update(security.id).digest('hex').slice(0, 32)}:${stage}`, timestamp: security.timestamp });
-        const tamper = await commandAll('/simulate-tamper', {}, downstream('tamper')); const snapshot = await Promise.all(nodeUrls.map(url => requestJson(`${url}/snapshot`).catch(() => ({ status: 503, body: {} })))); const detection = await commandAll('/scan', {}, downstream('detection')); const recovery = await commandAll('/rollback', {}, downstream('recovery')); const verification = await commandAll('/scan', {}, downstream('verification'));
+        const tamper = await commandAll('/simulate-tamper', {}, downstream('tamper')); const snapshot = await Promise.all(nodeUrls.map((url, index) => nodeRequest(index, '/snapshot').catch(() => ({ status: 503, body: {} })))); const detection = await commandAll('/scan', {}, downstream('detection')); const recovery = await commandAll('/rollback', {}, downstream('recovery')); const verification = await commandAll('/scan', {}, downstream('verification'));
         const groups = { tamper, snapshot, detection, recovery, verification };
         const workflow = Object.fromEntries(Object.entries(groups).map(([name, results]) => [name, results.map((result, index) => summarizeWorkflow(name, result, index))]));
         const allOk = Object.values(workflow).flat().every(result => result.ok);

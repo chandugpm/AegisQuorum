@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { announceAdminToken, initializeAuthorityTrust, loadEnvironmentFile, resolveRuntimeTokens } = require('../src/runtime-config');
 const { readJson, writeJsonAtomic } = require('../src/core');
-const { createNodeEnvironment, resolveDashboardPort } = require('../src/launch-local');
+const { createNodeEnvironment, launchLocal, resolveDashboardPort } = require('../src/launch-local');
 
 const adminEnvironmentToken = 'a'.repeat(32);
 const serviceEnvironmentToken = 'b'.repeat(32);
@@ -128,4 +128,37 @@ test('Render-provided dashboard port is honored and invalid ports fail before st
   assert.equal(resolveDashboardPort({}), 7000);
   assert.throws(() => resolveDashboardPort({ PORT: '0' }), /PORT must be/);
   assert.throws(() => resolveDashboardPort({ PORT: 'not-a-port' }), /PORT must be/);
+});
+
+test('Render virtualization starts in-memory nodes without child processes and routes gossip internally', async t => {
+  const root = temporaryRoot(t);
+  const environment = {
+    RENDER: 'true',
+    RUNTIME_DIRECTORY: root,
+    PORT: '17931',
+    DASHBOARD_ADMIN_TOKEN: adminEnvironmentToken,
+    NODE_SERVICE_TOKEN: serviceEnvironmentToken
+  };
+  const app = launchLocal({ environment, logger: { log() {}, warn() {}, error() {} } });
+  t.after(app.stop);
+  assert.equal(app.children.length, 0);
+  assert.ok(app.virtualNodes);
+  assert.equal(app.virtualNodes.nodes.length, 3);
+  const [a, b, c] = app.virtualNodes.nodes;
+  assert.ok(a.status().mode === 'trusted' && b.status().mode === 'trusted' && c.status().mode === 'trusted');
+
+  a.simulateTamper();
+  const scan = (await app.virtualNodes.handleRequest(0, '/scan', { method: 'POST' })).body;
+  assert.equal(scan.quarantined, true);
+  assert.equal(a.status().decoyState, 'DECOY_HONEYPOT');
+  assert.equal(scan.gossipDeliveries.length, 2);
+  assert.ok(scan.gossipDeliveries.every(item => item.inoculated));
+  assert.equal(b.status().shieldState, 'INOCULATED_SHIELD');
+  assert.equal(c.status().shieldState, 'INOCULATED_SHIELD');
+
+  const antibody = await app.virtualNodes.handleRequest(0, '/threat-antibody');
+  assert.equal(antibody.status, 200);
+  const inoculated = await app.virtualNodes.handleRequest(1, '/gossip/inoculate', { method: 'POST', payload: antibody.body });
+  assert.equal(inoculated.status, 200);
+  assert.equal(inoculated.body.inoculated, true);
 });

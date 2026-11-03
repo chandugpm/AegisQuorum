@@ -1,17 +1,99 @@
 {
-  "generatedAt": "2026-11-02T14:04:58.497Z",
+  "generatedAt": "2026-11-03T06:15:05.035Z",
   "isolatedDirectory": "temporary (removed at completion)",
   "metrics": {
     "mttdMs": 15,
-    "mttrMs": 11,
+    "mttrMs": 10,
     "approvalVerificationMs": 3,
     "auditChainVerificationMs": {
-      "events100": 14,
-      "events1000": 236
+      "events100": 13,
+      "events1000": 265
     },
     "falsePositivesOverCleanScans": {
       "falsePositives": 0,
       "cleanScans": 50
     }
-  }
+  },
+  "scenarios": [
+    {
+      "id": "recovery-without-incident",
+      "expected": "recovery-rejected",
+      "actual": "recovery-rejected",
+      "pass": true,
+      "durationMs": 409,
+      "evidenceRef": "node-not-quarantined"
+    },
+    {
+      "id": "normal-operation",
+      "expected": "clean",
+      "actual": "clean",
+      "pass": true,
+      "durationMs": 15,
+      "evidenceRef": "node-a:1050"
+    },
+    {
+      "id": "file-tampering",
+      "expected": "quarantined",
+      "actual": "quarantined",
+      "pass": true,
+      "durationMs": 87,
+      "evidenceRef": "node-a:1055"
+    },
+    {
+      "id": "duplicate-recovery-request",
+      "expected": "idempotent-rejection",
+      "actual": "idempotent-rejection",
+      "pass": true,
+      "durationMs": 887,
+      "evidenceRef": "node-not-quarantined"
+    },
+    {
+      "id": "unauthorized-policy-submission",
+      "expected": "unauthorized",
+      "actual": "unauthorized",
+      "pass": true,
+      "durationMs": 1,
+      "evidenceRef": "administrator-or-operator-token-required"
+    },
+    {
+      "id": "invalid-quorum",
+      "expected": "quorum-rejected",
+      "actual": "quorum-rejected",
+      "pass": true,
+      "durationMs": 404,
+      "evidenceRef": "policy-needs-two-valid-distinct-approvals"
+    },
+    {
+      "id": "replayed-request",
+      "expected": "replay-rejected",
+      "actual": "replay-rejected",
+      "pass": true,
+      "durationMs": 53,
+      "evidenceRef": "replayed-request"
+    },
+    {
+      "id": "invalid-ed25519-signature",
+      "expected": "signature-invalid",
+      "actual": "signature-invalid",
+      "pass": true,
+      "durationMs": 1,
+      "evidenceRef": null
+    },
+    {
+      "id": "snapshot-digest-mismatch",
+      "expected": "artifact-rejected",
+      "actual": "artifact-rejected",
+      "pass": true,
+      "durationMs": 408,
+      "evidenceRef": "snapshot-artifact-digest-mismatch"
+    },
+    {
+      "id": "post-recovery-integrity-failure",
+      "expected": "recovery-failed-safe",
+      "actual": "recovery-failed-safe",
+      "pass": true,
+      "durationMs": 150,
+      "evidenceRef": "node-a:1070"
+    }
+  ]
 }

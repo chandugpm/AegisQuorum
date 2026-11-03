@@ -43,7 +43,12 @@ function sanitizeForensicTranscript(value) {
     .replace(/(?:[A-Za-z]:\\|\/)[^\s,;]+/g, '[REDACTED_PATH]');
 }
 
-function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDirectory, authorityTrustFile, serviceToken, adminToken, operatorToken = process.env.DASHBOARD_OPERATOR_TOKEN || undefined, quorum = Number(process.env.POLICY_QUORUM || 2), staticDirectory = path.join(__dirname, '..', 'public'), logger = console, rateLimiter = createRateLimiter(), incidentRateLimiter = createRateLimiter({ perClientLimit: 5, globalLimit: 30 }), replayCache = new ReplayCache(), metrics = createMetrics(), incidentAnalyst = createIncidentAnalyst(), nodeTransport }) {
+// The default browser-facing budget must cover the dashboard's own documented
+// behavior (15s status polling + a ~40-request seven-stage demo) while still
+// bounding abuse. Tests inject their own limiters, so this only calibrates the
+// production default; mutation routes keep replay protection and the stricter
+// incidentRateLimiter.
+function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDirectory, authorityTrustFile, serviceToken, adminToken, operatorToken = process.env.DASHBOARD_OPERATOR_TOKEN || undefined, quorum = Number(process.env.POLICY_QUORUM || 2), staticDirectory = path.join(__dirname, '..', 'public'), logger = console, rateLimiter = createRateLimiter({ perClientLimit: 120, globalLimit: 600 }), incidentRateLimiter = createRateLimiter({ perClientLimit: 5, globalLimit: 30 }), replayCache = new ReplayCache(), metrics = createMetrics(), incidentAnalyst = createIncidentAnalyst(), nodeTransport }) {
   if (operatorToken === '') operatorToken = undefined;
   if (!validToken(adminToken) || !validToken(serviceToken) || (operatorToken !== undefined && !validToken(operatorToken))) throw new Error('dashboard, operator, and service tokens must be non-whitespace tokens of at least 32 characters');
   if (!Array.isArray(nodeUrls) || nodeUrls.length === 0) throw new Error('at least one node URL is required');
@@ -62,6 +67,34 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
   const statuses = () => Promise.all(nodeUrls.map(async (url, index) => { try { return sanitizeNodeStatus((await nodeRequest(index, '/status')).body, `node-${String.fromCharCode(97 + index)}`); } catch { return { name: `node-${String.fromCharCode(97 + index)}`, mode: 'offline', error: 'unavailable' }; } }));
   const auditReports = () => Promise.all(nodeUrls.map(async (url, index) => { try { const result = await nodeRequest(index, '/audit'); return result.status === 200 ? result.body : { node: `node-${String.fromCharCode(97 + index)}`, verification: { valid: false }, events: [] }; } catch { return { node: `node-${String.fromCharCode(97 + index)}`, verification: { valid: false }, events: [] }; } }));
   const commandAll = (endpoint, payload, security) => Promise.all(nodeUrls.map((url, index) => nodeRequest(index, endpoint, { method: 'POST', payload, security }).catch(() => ({ status: 503, body: {} }))));
+  // Read-path micro-cache + single-flight: collapses control-plane bursts
+  // (status polling + 360-degree audit refresh) into one node round-trip so
+  // the dashboard's own reads stay well inside node rate budgets. Every route
+  // that mutates node state or audit history calls invalidateNodeReadCache()
+  // after the mutation, before responding.
+  const nodeReadCache = (fn, ttlMs) => {
+    let cachedAt = 0; let cachedValue = null; let inFlight = null;
+    const read = () => {
+      if (cachedValue && Date.now() - cachedAt < ttlMs) return Promise.resolve(cachedValue);
+      if (inFlight) return inFlight;
+      inFlight = fn().then(value => { cachedValue = value; cachedAt = Date.now(); inFlight = null; return value; }, error => { inFlight = null; throw error; });
+      return inFlight;
+    };
+    read.invalidate = () => { cachedAt = 0; cachedValue = null; };
+    return read;
+  };
+  const statusesCached = nodeReadCache(statuses, 2000);
+  const auditReportsCached = nodeReadCache(auditReports, 2000);
+  const invalidateNodeReadCache = () => { statusesCached.invalidate(); auditReportsCached.invalidate(); };
+  const incidentFlights = new Map();
+  // Per-node single-flight: duplicate incident mutations (e.g. double-clicked
+  // recovery) are serialized instead of racing the node.
+  function serializeIncident(node, operation) {
+    const prior = incidentFlights.get(node) || Promise.resolve();
+    const result = prior.then(operation, operation);
+    incidentFlights.set(node, result.then(() => undefined, () => undefined));
+    return result;
+  }
   const securityEvents = [];
   const visualForensicsLedger = [];
   const gossipReceipts = [];
@@ -90,9 +123,9 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         recordSecurityEvent(request, 'rejected', 'rate-limit');
         return json(response, 429, { error: 'rate-limited' });
       }
-      if (await registerExtensions({ request, response, route, url, method: request.method, json, isAdmin: equal(request.headers['x-dashboard-admin-token'], adminToken) || Boolean(developmentSessions.get(cookieValue(request, 'danms_dev_admin'))?.expiresAt > Date.now() && process.env.NODE_ENV !== 'production'), replayCache, metrics, recordSecurityEvent, statuses, auditReports, incidentAnalyst, incidentRateLimiter, staticDirectory, logger })) return;
+      if (await registerExtensions({ request, response, route, url, method: request.method, json, isAdmin: equal(request.headers['x-dashboard-admin-token'], adminToken) || Boolean(developmentSessions.get(cookieValue(request, 'danms_dev_admin'))?.expiresAt > Date.now() && process.env.NODE_ENV !== 'production'), replayCache, metrics, recordSecurityEvent, statuses, auditReports, incidentAnalyst, incidentRateLimiter, staticDirectory, logger, visualForensicsLedger, statusesCached, auditReportsCached })) return;
       if (request.method === 'GET' && route === '/') { response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return response.end(fs.readFileSync(path.join(staticDirectory, 'index.html'))); }
-      if (request.method === 'GET' && route === '/api/status') return json(response, 200, { nodes: await statuses() });
+      if (request.method === 'GET' && route === '/api/status') return json(response, 200, { nodes: await statusesCached() });
       if (request.method === 'GET' && route === '/api/hackathon-manifest') return json(response, 200, extendManifest({
         event: 'Meta Global AI Developer Hackathon', eventWindow: 'Oct 26 - Nov 4',
         workstreams: {
@@ -118,7 +151,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         return json(response, 200, { update: makePolicyUpdate(sequence, { enforcement: 'observe-only', changeWindow: 'operator-requested' }), quorum });
       }
       if (request.method === 'GET' && route === '/api/audit') {
-        const [reports, nodeStatuses] = await Promise.all([auditReports(), statuses()]);
+        const [reports, nodeStatuses] = await Promise.all([auditReportsCached(), statusesCached()]);
         const nodes = reports.map(report => ({
           ...report,
           allAspects: {
@@ -151,7 +184,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         }, url.searchParams.get('download') === '1' ? { 'content-disposition': 'attachment; filename="danms-audit-evidence.json"' } : {});
       }
       if (request.method === 'GET' && route === '/api/audit/360') {
-        const [reports, nodeStatuses] = await Promise.all([auditReports(), statuses()]);
+        const [reports, nodeStatuses] = await Promise.all([auditReportsCached(), statusesCached()]);
         const verifiedReports = reports.filter(report => verifySanitizedAuditEvidence(report).valid);
         const records = verifiedReports.flatMap(report => report.proof.records.map(record => ({
           node: report.node, index: record.index, previousHash: record.previousHash, currentHash: record.hash,
@@ -231,7 +264,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         });
       }
       if (request.method === 'GET' && route === '/api/timeline') {
-        const [nodeStatuses, reports] = await Promise.all([statuses(), auditReports()]);
+        const [nodeStatuses, reports] = await Promise.all([statusesCached(), auditReportsCached()]);
         return json(response, 200, annotateTimeline(createTimeline(nodeStatuses, reports)));
       }
       if (request.method === 'GET' && route === '/metrics') return json(response, 200, metrics.snapshot());
@@ -295,7 +328,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         let digest;
         if (purpose === 'sign-proposal') {
           if (!webauthnAuthorities[authority]) return json(response, 409, { error: 'authority-passkey-not-registered' });
-          const current = await statuses();
+          const current = await statusesCached();
           const nextSequence = Math.max(0, ...current.map(node => node.lastPolicySequence || 0)) + 1;
           if (!webauthnAuthorities[authority] || !update || update.kind !== 'policy-update' ||
               update.sequence !== nextSequence || !update.payload || typeof update.payload !== 'object' || Array.isArray(update.payload)) {
@@ -375,7 +408,8 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
           id: `${crypto.createHash('sha256').update(security.id).digest('hex').slice(0, 32)}:deception`, timestamp: security.timestamp
         } }).catch(() => ({ status: 503, body: {} }));
         if (result.status !== 200) return json(response, result.status === 400 ? 409 : 503, { error: result.body.error || 'deception-probe-failed' });
-        const reports = await auditReports();
+        invalidateNodeReadCache();
+        const reports = await auditReportsCached();
         const report = reports[index];
         const auditIndex = result.body.threatFingerprint?.auditIndex;
         const event = report?.events?.find(item => item.index === auditIndex && item.type === 'deception-probe');
@@ -393,7 +427,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         });
       }
       if (route === '/api/policy/synthesize') {
-        const [nodeStatuses, reports] = await Promise.all([statuses(), auditReports()]);
+        const [nodeStatuses, reports] = await Promise.all([statusesCached(), auditReportsCached()]);
         const currentSequence = Math.max(0, ...nodeStatuses.map(node => node.lastPolicySequence || 0));
         const verifiedReports = reports.filter(report => verifySanitizedAuditEvidence(report).valid);
         const verifiedEvents = verifiedReports.flatMap(report => report.events.map(event => ({
@@ -432,7 +466,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
       }
       if (route === '/api/pre-cog/analyze') {
         if (!incidentRateLimiter.allow(clientKey(request))) return json(response, 429, { error: 'pre-cog-rate-limited' });
-        const [nodeStatuses, reports] = await Promise.all([statuses(), auditReports()]);
+        const [nodeStatuses, reports] = await Promise.all([statusesCached(), auditReportsCached()]);
         const verifiedReports = reports.filter(report => verifySanitizedAuditEvidence(report).valid);
         const candidates = verifiedReports.flatMap(report => report.events
           .filter(event => event.type === 'tamper-detected')
@@ -464,7 +498,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         });
       }
       if (route === '/api/gossip/broadcast') {
-        const allStatuses = await statuses();
+        const allStatuses = await statusesCached();
         const deceptionActive = node => Boolean(node?.quarantined) || node?.decoyState === 'DECOY_HONEYPOT';
         const sourceName = typeof input.sourceNode === 'string' ? input.sourceNode : allStatuses.find(deceptionActive)?.name;
         if (typeof sourceName !== 'string' || !/^node-[a-c]$/.test(sourceName)) return json(response, 409, { error: 'quarantined-source-node-required' });
@@ -494,6 +528,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
           }
           return { node: `node-${String.fromCharCode(97 + index)}`, inoculated: false };
         }));
+        invalidateNodeReadCache();
         return json(response, deliveries.filter(item => item.inoculated).length ? 200 : 503, { deliveries });
       }
       if (route === '/api/visual-forensics') {
@@ -540,7 +575,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         const modelsInvoked = [...new Set([...(visual.modelsInvoked || []), ...(correlation.modelsInvoked || [])])];
         const providerMode = correlation.providerMode !== 'Deterministic Fallback' ? correlation.providerMode
           : visual.providerMode || 'Deterministic Fallback';
-        visualForensicsLedger.push({ at: new Date().toISOString(), redactionBoxCount: redactionBoxes.length, referencesValidated, verifiedEventIds });
+        visualForensicsLedger.push({ at: new Date().toISOString(), redactionBoxCount: redactionBoxes.length, referencesValidated, verifiedEventIds, providerMode, modelsInvoked });
         if (visualForensicsLedger.length > 100) visualForensicsLedger.shift();
         return json(response, 200, {
           providerMode,
@@ -568,13 +603,14 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
       }
       if (route === '/api/incident-analysis') {
         if (!incidentRateLimiter.allow(clientKey(request))) return json(response, 429, { error: 'incident-analysis-rate-limited' });
-        const [nodeStatuses, reports] = await Promise.all([statuses(), auditReports()]);
+        const [nodeStatuses, reports] = await Promise.all([statusesCached(), auditReportsCached()]);
         return json(response, 200, annotateAnalyst(await incidentAnalyst.analyze({ statuses: nodeStatuses, reports }), reports));
       }
       if (route === '/api/incident-response') {
         if (typeof input.node !== 'string' || !/^node-[a-c]$/.test(input.node) || !['tamper', 'scan', 'verify-snapshot', 'recover'].includes(input.action)) return json(response, 400, { error: 'invalid-incident-response' });
         const index = input.node.charCodeAt(input.node.length - 1) - 97;
         if (index >= nodeUrls.length) return json(response, 404, { error: 'node-not-found' });
+        const operation = serializeIncident(input.node, async () => {
         const downstream = stage => ({ id: `${crypto.createHash('sha256').update(security.id).digest('hex').slice(0, 32)}:${stage}`, timestamp: security.timestamp });
         if (input.action === 'tamper') {
           const result = await nodeRequest(index, '/simulate-tamper', { method: 'POST', payload: {}, security: downstream('incident-tamper') }).catch(() => ({ status: 503, body: {} }));
@@ -613,17 +649,26 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         const verification = await nodeRequest(index, '/scan', { method: 'POST', payload: {}, security: downstream('incident-post-recovery-scan') }).catch(() => ({ status: 503, body: {} }));
         if (verification.status !== 200 || verification.body.clean !== true) return json(response, 503, { node: input.node, action: 'recover', operationStatus: 'post-recovery-check-failed', restored: true, postRecoveryVerified: false });
         return json(response, 200, { node: input.node, action: 'recover', operationStatus: 'verified', restored: true, postRecoveryVerified: true, digest: verification.body.digest });
+        });
+        // Two-branch then: no floating rejection can ever become an unhandled
+        // rejection; the cache invalidates after the operation settles either way.
+        operation.then(
+          () => { if (input.action !== 'verify-snapshot') invalidateNodeReadCache(); },
+          () => { if (input.action !== 'verify-snapshot') invalidateNodeReadCache(); }
+        );
+        return operation;
       }
       if (route === '/api/policy') {
         if (!input.update || typeof input.update !== 'object' || Array.isArray(input.update) || !Array.isArray(input.approvals)) return json(response, 400, { error: 'invalid-policy-request' });
         return await serializePolicy(async () => {
-          const current = await statuses(); const sequence = Math.max(...current.map(n => n.lastPolicySequence || 0)) + 1;
+          const current = await statusesCached(); const sequence = Math.max(...current.map(n => n.lastPolicySequence || 0)) + 1;
           if (input.update.sequence !== sequence) return json(response, 409, { error: 'stale-policy-proposal', expectedSequence: sequence });
           try { validatePolicyApprovals(input.update, input.approvals, trustedAuthorities, quorum, sequence - 1, webauthnAuthorities); }
           catch (error) { return json(response, 403, { error: error.message }); }
           const update = input.update; const approvals = input.approvals;
           const results = await commandAll('/policy', { update, approvals }, security); const summary = results.map(summarizeCommand);
           metrics.increment('replay_protected_operations_total');
+          invalidateNodeReadCache();
           return json(response, nodeUrls.length > 0 && summary.length === nodeUrls.length && summary.every(result => result.ok) ? 200 : 503, { update: { sequence: update.sequence }, approvals: approvals.map(approval => approval.authority), results: summary });
         });
       }
@@ -633,7 +678,8 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         const groups = { tamper, snapshot, detection, recovery, verification };
         const workflow = Object.fromEntries(Object.entries(groups).map(([name, results]) => [name, results.map((result, index) => summarizeWorkflow(name, result, index))]));
         const allOk = Object.values(workflow).flat().every(result => result.ok);
-        return json(response, allOk ? 200 : 503, { workflow, nodes: await statuses(), audit: await auditReports() });
+        invalidateNodeReadCache();
+        return json(response, allOk ? 200 : 503, { workflow, nodes: await statusesCached(), audit: await auditReportsCached() });
       }
       return json(response, 404, { error: 'not-found' });
     } catch (error) {

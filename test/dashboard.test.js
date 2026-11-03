@@ -64,7 +64,7 @@ test('dashboard reports sanitized live state and executes the authenticated real
   assert.equal(/<link[^>]+href=["']https?:/i.test(page.body), false);
   assert.ok(page.body.includes('id="auditVault"') && page.body.includes('id="manifestDialog"'));
   assert.ok(page.body.includes('id="integrityRing"') && page.body.includes('id="safetyRing"'));
-  assert.ok(page.body.includes('id="mttdRingValue">14ms') && page.body.includes('id="mttrRingValue">42ms'));
+  assert.ok(page.body.includes('id="mttdRingValue">—') && page.body.includes('id="mttrRingValue">—'));
   assert.ok(page.body.includes('id="demoAutoAuth"'));
   assert.ok(page.body.includes('id="metaHolo"'));
   assert.ok(page.body.includes('▶ RUN AUTONOMOUS DEMO'));

@@ -64,7 +64,13 @@ function startNode({ directory, name, authorityFile, port, host = '127.0.0.1', s
     metrics.increment('http_requests_total');
     try {
       const requester = clientKey(request);
-      if (!rateLimiter.allow(requester) || (node.state.shieldState === 'INOCULATED_SHIELD' && !shieldRateLimiter.allow(requester))) return json(response, 429, { error: 'rate-limited' });
+      // The elevated shield limiter throttles UNAUTHENTICATED traffic only.
+      // The local control plane authenticates every request with the node
+      // service token and must keep full observability of a shielded or
+      // quarantined node; traffic without the token still faces the strict
+      // shield budget. No limit is removed or weakened.
+      const controlPlane = secureEqual(String(request.headers['x-node-service-token'] || ''), serviceToken);
+      if (!rateLimiter.allow(requester) || (node.state.shieldState === 'INOCULATED_SHIELD' && !controlPlane && !shieldRateLimiter.allow(requester))) return json(response, 429, { error: 'rate-limited' });
       const route = new URL(request.url, 'http://node.local').pathname;
       if (request.method === 'GET' && route === '/health') return json(response, 200, { ok: true, node: name });
       if (request.method === 'GET' && route === '/status') return json(response, 200, node.status());

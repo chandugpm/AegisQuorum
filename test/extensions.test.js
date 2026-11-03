@@ -115,5 +115,5 @@ test('extension routes are registered and gated by admin auth and replay protect
 
 test('extensions flag and route set are correct', () => {
   assert.equal(enabled(), process.env.ENABLE_EXTENSIONS !== 'false');
-  assert.deepEqual(EXTENSION_ROUTES, ['/api/red-team/run', '/api/benchmarks', '/api/threat-intel/export']);
+  assert.deepEqual(EXTENSION_ROUTES, ['/api/red-team/run', '/api/benchmarks', '/api/threat-intel/export', '/api/recovery/certificate']);
 });

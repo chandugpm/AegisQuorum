@@ -173,12 +173,16 @@ function parseArguments(args) {
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
     if (arg === '--help' || arg === '-h') return { help: true };
-    if (['--node', '--trusted-key', '--snapshot'].includes(arg)) {
+    if (['--node', '--trusted-key', '--snapshot', '--certificate'].includes(arg)) {
       if (options[arg] || !args[index + 1] || args[index + 1].startsWith('--')) throw new Error(`invalid-${arg}-argument`);
       options[arg] = args[++index];
     } else if (arg.startsWith('--')) {
       throw new Error('unknown-option');
     } else positional.push(arg);
+  }
+  if (options['--certificate'] && positional.length > 0) throw new Error('certificate-conflicts-with-audit-export');
+  if (options['--certificate']) {
+    return { certificatePath: options['--certificate'], trustedKeyPath: options['--trusted-key'], snapshotPath: options['--snapshot'] };
   }
   if (positional.length !== 1) throw new Error('audit-export-required');
   return { filename: positional[0], node: options['--node'], trustedKeyPath: options['--trusted-key'], snapshotPath: options['--snapshot'] };
@@ -205,7 +209,39 @@ function loadTrustedKey(filename, expectedNode) {
 }
 
 function usage() {
-  return 'Usage: npm run verify-recovery -- <sanitized-audit-export.json> --node <node-name> --trusted-key <independent-node-trust.json> [--snapshot <original-snapshot.json>]';
+  return 'Usage: npm run verify-recovery -- <sanitized-audit-export.json> --node <node-name> --trusted-key <independent-node-trust.json> [--snapshot <original-snapshot.json>]\n   or: npm run verify-recovery -- --certificate <recovery-certificate.json> [--trusted-key <independent-node-trust.json>] [--snapshot <original-snapshot.json>]';
+}
+
+// Independently verifies a portable recovery certificate. Audit-only mode by
+// default; supplying --trusted-key and --snapshot upgrades to full recovery
+// proof. Exit 0 only when the requested proof level verifies.
+function verifyCertificateFile(options) {
+  // Lazy require: recovery-certificate depends on this module's report builder.
+  const { verifyRecoveryCertificate, CERTIFICATE_FORMAT } = require('./recovery-certificate');
+  let certificate;
+  try { certificate = JSON.parse(fs.readFileSync(path.resolve(options.certificatePath), 'utf8')); }
+  catch { console.error('certificate verification failed: invalid or unreadable certificate file'); return 1; }
+  if (certificate?.format !== CERTIFICATE_FORMAT) {
+    console.error('certificate verification failed: not an aegis recovery certificate');
+    return 1;
+  }
+  const trust = loadTrustedKey(options.trustedKeyPath, certificate.node);
+  let snapshotBytes;
+  let snapshotArtifactError;
+  if (options.snapshotPath) {
+    try { snapshotBytes = fs.readFileSync(path.resolve(options.snapshotPath)); }
+    catch { snapshotArtifactError = 'snapshot-artifact-missing-or-unreadable'; }
+  }
+  const result = verifyRecoveryCertificate(certificate, { trustedPublicKey: trust.publicKey, snapshotBytes });
+  const verification = { ...result.verification };
+  if (snapshotArtifactError) verification.snapshotArtifact = `failed-${snapshotArtifactError}`;
+  if (snapshotArtifactError) verification.completeRecoveryProof = 'not-verified';
+  process.stdout.write(`${JSON.stringify({ certificateVerification: { node: result.node, consistent: result.consistent, ...verification } })}\n`);
+  const fullRequested = Boolean(options.snapshotPath);
+  const valid = fullRequested
+    ? verification.completeRecoveryProof === 'verified'
+    : verification.auditOnlyProof === 'verified';
+  return valid ? 0 : 1;
 }
 
 function main(args) {
@@ -219,6 +255,7 @@ function main(args) {
     console.log(usage());
     return 0;
   }
+  if (options.certificatePath) return verifyCertificateFile(options);
   try {
     const exported = JSON.parse(fs.readFileSync(path.resolve(options.filename), 'utf8'));
     const reports = Array.isArray(exported.nodes) ? exported.nodes : [exported];
@@ -248,5 +285,5 @@ function main(args) {
   }
 }
 
-if (require.main === module) process.exitCode = main(process.argv.slice(2));
 module.exports = { createRecoveryVerificationReport, main, parseArguments };
+if (require.main === module) process.exitCode = main(process.argv.slice(2));

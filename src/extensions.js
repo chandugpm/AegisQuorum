@@ -3,6 +3,7 @@ const path = require('node:path');
 const { runRedTeam } = require('./red-team');
 const { exportStix } = require('./threat-intel');
 const { withEventTechniques, withAnalystTechniques } = require('./mitre');
+const { buildRecoveryCertificate } = require('./recovery-certificate');
 const { requestSecurity, clientKey, readJsonBody, RequestError } = require('./http-utils');
 
 // Additive hackathon extensions. Everything here is registered under NEW
@@ -11,7 +12,7 @@ const { requestSecurity, clientKey, readJsonBody, RequestError } = require('./ht
 // exactly as the baseline. Each handler is wrapped so a failure returns a
 // clean 500 for that route only and can never crash the dashboard or nodes.
 
-const EXTENSION_ROUTES = ['/api/red-team/run', '/api/benchmarks', '/api/threat-intel/export'];
+const EXTENSION_ROUTES = ['/api/red-team/run', '/api/benchmarks', '/api/threat-intel/export', '/api/recovery/certificate'];
 
 function enabled(environment = process.env) {
   return environment.ENABLE_EXTENSIONS !== 'false';
@@ -39,6 +40,19 @@ async function registerExtensions(context) {
       const file = path.join(process.cwd(), 'benchmark-results.json');
       if (!fs.existsSync(file)) { json(response, 404, { error: 'benchmark-results-unavailable' }); return true; }
       json(response, 200, JSON.parse(fs.readFileSync(file, 'utf8')));
+      return true;
+    }
+
+    if (route === '/api/recovery/certificate') {
+      if (method !== 'GET') { json(response, 405, { error: 'method-not-allowed' }); return true; }
+      const reports = await (context.auditReportsCached || context.auditReports)();
+      const requested = context.url.searchParams.get('node');
+      const report = requested ? reports.find(item => item.node === requested) : (reports.length === 1 ? reports[0] : null);
+      if (!report) { json(response, 404, { error: 'node-report-not-found' }); return true; }
+      // AI provenance from the latest visual/voice forensic correlation, when
+      // one exists. The certificate never claims analysis that did not run.
+      const aiProvenance = (context.visualForensicsLedger || []).at(-1) || null;
+      json(response, 200, buildRecoveryCertificate(report, { aiProvenance }));
       return true;
     }
 

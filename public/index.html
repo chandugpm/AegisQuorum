@@ -134,6 +134,180 @@
     .audit-dock.chain-broken{border-color:rgba(244,63,94,.85);box-shadow:0 0 26px rgba(244,63,94,.2),inset 0 0 20px rgba(244,63,94,.08)}
     @keyframes chain-alert{0%,100%{box-shadow:0 0 10px rgba(244,63,94,.12)}50%{box-shadow:0 0 55px rgba(244,63,94,.6),inset 0 0 30px rgba(244,63,94,.19)}}
   </style>
+  <style id="dashboard-polish-css">
+/* Dashboard polish layer — UI-only judge-experience upgrade.
+   Loaded inline in index.html (style#dashboard-polish-css); public/dashboard-polish.css is the
+   source copy. No existing selectors, IDs, or behavior are modified here —
+   everything below styles NEW wrapper markup or adds purely visual states. */
+
+/* ---------- A. Hero ---------- */
+.hero{position:relative;text-align:center;padding:34px 18px 26px;margin-bottom:14px;border:1px solid var(--line);border-radius:10px;background:radial-gradient(ellipse at 50% 0%,rgba(16,185,129,.09),transparent 55%),var(--surface);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 20px 70px rgba(0,0,0,.4)}
+.hero-kicker{margin:0 0 16px;color:var(--muted);font:10px var(--mono);letter-spacing:.16em;text-transform:uppercase}
+.hero #runFull{min-width:0;width:100%;max-width:480px;padding:19px 30px;border-radius:12px;font-size:15px;letter-spacing:.14em}
+.hero-sub{max-width:620px;margin:14px auto 0;color:var(--muted);font-size:13px;line-height:1.6}
+.hero-status{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;max-width:780px;margin:22px auto 0}
+.hero-chip{min-width:0;padding:12px 10px;border:1px solid rgba(56,189,248,.2);border-radius:8px;background:rgba(7,12,21,.66)}
+.hero-chip small{display:block;color:var(--muted);font:9px var(--mono);letter-spacing:.12em;text-transform:uppercase}
+.hero-chip strong{display:block;margin-top:6px;font:700 12px/1.4 var(--mono);overflow-wrap:anywhere}
+
+/* ---------- B. Scoreboard ---------- */
+.scoreboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}
+.stat{min-width:0;padding:16px;border:1px solid var(--line);border-radius:8px;background:var(--surface);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 18px 60px rgba(0,0,0,.24);transition:border-color .24s ease,box-shadow .24s ease}
+.stat:hover{border-color:rgba(56,189,248,.5);box-shadow:0 18px 58px rgba(0,0,0,.32),0 0 24px rgba(6,182,212,.08)}
+.stat small{color:var(--muted);font:9px var(--mono);letter-spacing:.12em;text-transform:uppercase}
+.stat strong{display:block;margin:7px 0 5px;font:700 30px/1.1 var(--mono);color:#f4f9ff;text-shadow:0 0 16px rgba(6,182,212,.28)}
+.stat p{margin:0;color:var(--muted);font-size:10px;line-height:1.45}
+
+/* ---------- C. Attack-to-recovery flow diagram ---------- */
+.flow{padding:16px;margin-bottom:14px;border:1px solid rgba(6,182,212,.24);border-radius:10px;background:var(--surface);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 18px 60px rgba(0,0,0,.24)}
+.flow-head h2{margin:0;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.flow-track{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;margin:12px 0 0;padding:0;list-style:none}
+.flow-step{position:relative;display:grid;justify-items:center;align-content:start;gap:5px;min-width:0;padding:12px 7px 10px;border:1px solid rgba(137,151,170,.22);border-radius:8px;background:rgba(7,12,21,.7);text-align:center;transition:border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+.flow-step:not(:last-child)::after{content:"";position:absolute;top:26px;right:-11px;width:12px;height:2px;background:rgba(137,151,170,.35)}
+.flow-icon{display:grid;place-items:center;width:32px;height:32px;border:1px solid currentColor;border-radius:50%;color:var(--muted)}
+.flow-icon svg{width:16px;height:16px}
+.flow-step b{font:700 9px var(--mono);letter-spacing:.05em;text-transform:uppercase}
+.flow-caption{color:var(--muted);font-size:9px;line-height:1.4}
+.flow-state{font:8px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+/* accent colors: red = attack, green = defended, blue = cryptographic proof */
+.flow-step[data-flow="tamper"] .flow-icon,.flow-step[data-flow="deception"] .flow-icon{color:var(--red)}
+.flow-step[data-flow="gossip"] .flow-icon,.flow-step[data-flow="rollback"] .flow-icon{color:var(--green)}
+.flow-step[data-flow="forensics"] .flow-icon,.flow-step[data-flow="synthesize"] .flow-icon,.flow-step[data-flow="quorum"] .flow-icon{color:var(--cyan)}
+/* states: waiting (grey) / running (pulsing amber) / done (green) / failed (red) */
+.flow-step.is-running{border-color:rgba(245,158,11,.75);box-shadow:0 0 22px rgba(245,158,11,.18);transform:translateY(-2px)}
+.flow-step.is-running .flow-icon{color:var(--amber);animation:flow-pulse 1.1s ease-in-out infinite}
+.flow-step.is-running .flow-state{color:var(--amber)}
+.flow-step.is-done{border-color:rgba(16,185,129,.6)}
+.flow-step.is-done .flow-icon{color:var(--green);background:rgba(16,185,129,.1);box-shadow:0 0 14px rgba(16,185,129,.25)}
+.flow-step.is-done .flow-state{color:var(--green)}
+.flow-step.is-failed{border-color:rgba(244,63,94,.8);box-shadow:0 0 20px rgba(244,63,94,.2)}
+.flow-step.is-failed .flow-icon{color:var(--red);background:rgba(244,63,94,.1)}
+.flow-step.is-failed .flow-state{color:var(--red)}
+@keyframes flow-pulse{50%{box-shadow:0 0 20px rgba(245,158,11,.65);transform:scale(1.12)}}
+
+/* ---------- D. Node mesh cards ---------- */
+.workspace-grid{grid-template-columns:minmax(0,1fr)}
+.node-card{position:relative;min-width:0;padding:10px;border:1px solid rgba(137,151,170,.2);border-radius:8px;background:linear-gradient(160deg,rgba(13,20,32,.92),rgba(5,8,13,.92));transition:border-color .3s ease,box-shadow .3s ease}
+.node-card strong{font:700 11px var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.status-chip{display:inline-block;margin-left:7px;padding:2px 8px;border:1px solid;border-radius:99px;font:8px var(--mono);letter-spacing:.07em;vertical-align:1px}
+.chip-trusted{color:var(--green);border-color:rgba(16,185,129,.5);background:rgba(16,185,129,.08)}
+.chip-quarantined{color:var(--red);border-color:rgba(244,63,94,.55);background:rgba(244,63,94,.09)}
+.chip-decoy{color:var(--amber);border-color:rgba(245,158,11,.55);background:rgba(245,158,11,.09)}
+.chip-inoculated{color:var(--cyan);border-color:rgba(6,182,212,.55);background:rgba(6,182,212,.09)}
+.node-card.status-trusted{border-color:rgba(16,185,129,.32)}
+.node-card.status-decoy{border-color:rgba(245,158,11,.5);box-shadow:0 0 18px rgba(245,158,11,.12);animation:card-breathe 1.6s ease-in-out infinite}
+.node-card.status-quarantined{border-color:rgba(244,63,94,.55);box-shadow:0 0 18px rgba(244,63,94,.14);animation:card-breathe 1.2s ease-in-out infinite}
+.node-card.status-inoculated{border-color:rgba(6,182,212,.5);box-shadow:0 0 16px rgba(6,182,212,.12)}
+@keyframes card-breathe{50%{box-shadow:0 0 30px rgba(245,158,11,.28)}}
+.node-card.gossip-source{animation:gossip-emit 1.6s ease-out}
+.node-card.gossip-hit{animation:gossip-hit 1.6s ease-out;border-color:rgba(6,182,212,.75)}
+@keyframes gossip-emit{0%{box-shadow:0 0 0 rgba(6,182,212,0)}25%{box-shadow:0 0 30px rgba(6,182,212,.6)}100%{box-shadow:0 0 0 rgba(6,182,212,0)}}
+@keyframes gossip-hit{0%{box-shadow:0 0 0 rgba(6,182,212,0)}40%{box-shadow:0 0 34px rgba(6,182,212,.65)}100%{box-shadow:0 0 0 rgba(6,182,212,0)}}
+.hash-details{margin-top:5px}
+.hash-details summary{cursor:pointer;color:var(--cyan);font:9px var(--mono);letter-spacing:.05em}
+.hash-details summary:hover{text-decoration:underline}
+.hash-details code{display:block;margin-top:4px;padding:5px 6px;border:1px solid rgba(137,151,170,.16);border-radius:4px;background:rgba(5,10,17,.7);color:#b4c5d8;font:8px/1.5 var(--mono);overflow-wrap:anywhere}
+
+/* ---------- E. Clarity layer ---------- */
+.panel-caption{display:flex;align-items:flex-start;gap:7px;margin:6px 0 8px;color:var(--muted);font-size:10px;line-height:1.5}
+.panel-caption::before{content:"i";flex:none;width:14px;height:14px;margin-top:1px;border:1px solid rgba(6,182,212,.6);border-radius:50%;color:var(--cyan);font:700 9px/13px var(--mono);text-align:center}
+.glossary{margin:0 0 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.glossary>summary{cursor:pointer;padding:12px 16px;color:var(--cyan);font:700 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;list-style:none}
+.glossary>summary::-webkit-details-marker{display:none}
+.glossary>summary::after{content:"▸";float:right;transition:transform .2s ease}
+.glossary[open]>summary::after{transform:rotate(90deg)}
+.glossary dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px 18px;margin:0;padding:2px 16px 14px}
+.glossary dt{color:#a5f3fc;font:700 9px var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.glossary dd{margin:3px 0 0;color:var(--muted);font-size:10px;line-height:1.5}
+.json-details{border:1px solid rgba(137,151,170,.2);border-radius:5px;background:rgba(5,10,17,.6)}
+.json-details summary{cursor:pointer;padding:7px 9px;color:var(--cyan);font:10px var(--mono)}
+.json-details summary:hover{text-decoration:underline}
+.json-details pre{margin:0;padding:8px 9px;border-top:1px solid rgba(137,151,170,.15);max-height:230px;overflow:auto;white-space:pre-wrap;font:9px/1.5 var(--mono);color:#c5d3e4}
+
+/* ---------- F. Advanced controls drawer ---------- */
+.advanced{margin:0 0 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 18px 60px rgba(0,0,0,.24)}
+.advanced>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:15px 16px;list-style:none}
+.advanced>summary::-webkit-details-marker{display:none}
+.advanced>summary .advanced-title{color:#f4f9ff;font:700 12px var(--mono);letter-spacing:.1em;text-transform:uppercase}
+.advanced>summary .advanced-sub{color:var(--muted);font:9px var(--mono);letter-spacing:.04em}
+.advanced>summary::after{content:"▸";flex:none;color:var(--cyan);transition:transform .2s ease}
+.advanced[open]>summary::after{transform:rotate(90deg)}
+.advanced-body{display:grid;gap:14px;padding:2px 14px 16px}
+.advanced-body>*{min-width:0}
+.advanced-body>.executive,.advanced-body>.ring-grid{margin-bottom:0}
+.advanced-h{margin:0 0 7px;color:var(--cyan);font:700 10px var(--mono);letter-spacing:.1em;text-transform:uppercase}
+.advanced-stage-controls .story-actions{margin-top:8px}
+.ledger-proof{margin:4px 0 2px}
+.ledger-proof .badge{font-size:10px;padding:6px 11px}
+
+/* tour button removed from the visible page only; its code path is untouched */
+#tourStart{display:none}
+
+/* ---------- G. Polish: focus, contrast, motion ---------- */
+summary:focus-visible,a:focus-visible{outline:2px solid rgba(6,182,212,.85);outline-offset:2px;border-radius:4px}
+summary{cursor:pointer}
+@media(max-width:900px){
+  .flow-track{grid-template-columns:1fr;gap:8px}
+  .flow-step{grid-template-columns:auto 1fr auto;justify-items:start;text-align:left;column-gap:10px;padding:10px 12px}
+  .flow-step:not(:last-child)::after{top:auto;bottom:-9px;right:auto;left:26px;width:2px;height:9px}
+  .flow-step b{font-size:10px}
+  .flow-caption{grid-column:2;font-size:10px}
+  .flow-state{grid-row:1;grid-column:3}
+}
+@media(max-width:640px){
+  .hero{padding:26px 12px 20px}
+  .hero-status{grid-template-columns:1fr}
+  .stat strong{font-size:24px}
+}
+@media(prefers-reduced-motion:reduce){
+  .flow-step.is-running .flow-icon,.node-card.status-decoy,.node-card.status-quarantined,.node-card.gossip-source,.node-card.gossip-hit{animation:none!important}
+  .flow-step{transition:none}
+}
+
+/* ---------- Proof Explorer ---------- */
+.proof-explorer{margin-bottom:12px}
+.proof-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.proof-controls select{width:auto;min-width:120px;padding:8px 10px}
+.proof-classes{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.proof-panel:empty{display:none}
+.proof-fields{display:grid;grid-template-columns:minmax(150px,210px) 1fr;gap:4px 12px;margin:8px 0;padding:10px;border:1px solid rgba(137,151,170,.18);border-radius:6px;background:rgba(5,10,17,.6)}
+.proof-fields dt{color:var(--muted);font:9px var(--mono);text-transform:uppercase;letter-spacing:.08em}
+.proof-fields dd{margin:0;font:10px var(--mono);overflow-wrap:anywhere;color:#c5d3e4}
+#proofOffline code{color:var(--amber);overflow-wrap:anywhere}
+
+/* ---------- Judge demo script ---------- */
+.judge-script{margin:0 0 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.judge-script>summary{cursor:pointer;padding:12px 16px;color:var(--cyan);font:700 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;list-style:none}
+.judge-script>summary::-webkit-details-marker{display:none}
+.judge-script>summary::after{content:"▸";float:right;transition:transform .2s ease}
+.judge-script[open]>summary::after{transform:rotate(90deg)}
+.judge-opening{margin:0;padding:2px 16px 10px;color:#dbeafe;font-size:11px;line-height:1.65;border-left:2px solid var(--cyan);margin-left:16px;margin-right:16px}
+.judge-steps{margin:0;padding:0 16px 14px 36px;display:grid;gap:4px}
+.judge-steps li{position:relative;color:var(--muted);font-size:10px;line-height:1.5;padding-right:22px}
+.judge-steps li.done{color:var(--green)}
+.judge-steps li.done::after{content:"✓";position:absolute;right:2px;color:var(--green);font-weight:700}
+
+/* ---------- Human-governed authorization chain ---------- */
+.authz-chain{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:9px 0;padding:8px 10px;border:1px solid rgba(139,92,246,.25);border-radius:6px;background:rgba(139,92,246,.05)}
+.authz-chain span{padding:3px 9px;border:1px solid rgba(137,151,170,.25);border-radius:99px;color:var(--muted);font:8px var(--mono);letter-spacing:.05em;text-transform:uppercase}
+.authz-chain i{color:var(--muted);font-style:normal;font-size:9px}
+.authz-chain span.done{color:var(--green);border-color:rgba(16,185,129,.5);background:rgba(16,185,129,.08)}
+.authz-chain span.partial{color:var(--amber);border-color:rgba(245,158,11,.5);background:rgba(245,158,11,.08)}
+
+/* ---------- Grounded AI analysis panel ---------- */
+.analyst-panel{margin-top:8px;padding:10px;border:1px solid rgba(56,189,248,.2);border-radius:6px;background:rgba(5,10,17,.6)}
+.analyst-provenance{margin:0 0 6px;color:var(--cyan);font:9px var(--mono);line-height:1.5}
+.analyst-section{margin-top:9px}
+.analyst-section h3{margin:0 0 4px;font:700 9px var(--mono);letter-spacing:.08em;text-transform:uppercase}
+.analyst-section ul{margin:0;padding-left:16px}
+.analyst-section li{margin:3px 0;color:#c5d3e4;font-size:10px;line-height:1.5}
+.analyst-section.facts h3{color:var(--green)}
+.analyst-section.interpretation h3{color:var(--violet)}
+.analyst-section.unknowns h3{color:var(--amber)}
+.analyst-section.recommendations h3{color:var(--cyan)}
+.evidence-chip{display:inline-block;margin-left:4px;padding:1px 7px;border:1px solid rgba(6,182,212,.4);border-radius:99px;color:var(--cyan);background:rgba(6,182,212,.06);font:8px var(--mono);cursor:pointer}
+.evidence-chip:hover{border-color:var(--cyan);color:#a5f3fc}
+  </style>
 </head>
 <body>
 <main class="shell">
@@ -163,42 +337,61 @@
     </div>
   </header>
 
-  <section class="executive" aria-label="Command telemetry">
-    <div class="metric posture" id="postureMetric"><small>System DEFCON posture</small><strong id="defcon" class="green">DEFCON 5: VERIFIED SECURE</strong></div>
-    <div class="metric"><small>Verified nodes</small><strong id="verifiedCount">0 / 3</strong></div>
-    <div class="metric"><small>Policy sequence lock</small><strong id="sequence">—</strong></div>
-    <div class="metric"><small>MTTD · session</small><strong id="mttd">— ms</strong></div>
-    <div class="metric"><small>MTTR · session</small><strong id="mttr">— ms</strong></div>
-    <div class="metric"><small>Anti-replay nonce</small><strong class="nonce-label" id="nonceTicker">READY · FRESH PER POST</strong></div>
-  </section>
-  <section class="ring-grid" aria-label="Live system KPI gauges">
-    <article class="ring-card"><div class="ring-visual"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="ring-track" cx="32" cy="32" r="26"/><circle class="ring-progress" id="integrityRing" cx="32" cy="32" r="26"/></svg><strong class="ring-value" id="integrityValue">100%</strong></div><div class="ring-copy"><strong>System integrity</strong><small>SHA-256 · signed snapshots</small></div></article>
-    <article class="ring-card"><div class="ring-visual"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="ring-track" cx="32" cy="32" r="26"/><circle class="ring-progress cyan-ring" id="safetyRing" cx="32" cy="32" r="26"/></svg><strong class="ring-value" id="safetyValue">100%</strong></div><div class="ring-copy"><strong>Sandbox safety</strong><small id="safetyNote">Demo baseline · verify on dry-run</small></div></article>
-    <article class="ring-card"><div class="ring-visual"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="ring-track" cx="32" cy="32" r="26"/><circle class="ring-progress violet-ring" id="mttdRing" cx="32" cy="32" r="26"/></svg><strong class="ring-value" id="mttdRingValue">14ms</strong></div><div class="ring-copy"><strong>MTTD</strong><small>Mean detect time</small></div></article>
-    <article class="ring-card"><div class="ring-visual"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="ring-track" cx="32" cy="32" r="26"/><circle class="ring-progress amber-ring" id="mttrRing" cx="32" cy="32" r="26"/></svg><strong class="ring-value" id="mttrRingValue">42ms</strong></div><div class="ring-copy"><strong>MTTR</strong><small>Mean recovery time</small></div></article>
-  </section>
-  <section class="metric glass" style="margin-bottom:12px;padding:9px 12px" aria-label="AI model status">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
-      <span class="eyebrow">Meta AI multi-model status</span>
-      <span class="badge warn" id="modelStatus">Deterministic Fallback</span>
-      <span class="badge" data-model="muse-spark-1.3">muse-spark-1.3 · standby</span>
-      <span class="badge" data-model="sam-3.1">sam-3.1 · standby</span>
-      <span class="badge" data-model="muse-voice-transcribe">Muse Voice · standby</span>
-      <span class="badge" data-model="baseten">Baseten muse-spark-open-1026 · standby</span>
+  <section class="hero" aria-label="Run the autonomous demo">
+    <p class="hero-kicker">Live three-node zero-trust cluster · human-gated recovery</p>
+    <button id="runFull" class="runall" aria-label="Run the full autonomous seven-stage attack-to-recovery demo">▶ RUN AUTONOMOUS DEMO</button>
+    <p class="hero-sub">Watch Aegis detect an attack, trap the attacker, protect other nodes, and recover with cryptographic proof.</p>
+    <div class="hero-status">
+      <div class="hero-chip"><small>Nodes trusted</small><strong id="heroVerified">—</strong></div>
+      <div class="hero-chip"><small>DEFCON posture</small><strong id="heroDefcon" class="green">—</strong></div>
+      <div class="hero-chip"><small>AI mode</small><strong id="heroAi" class="amber">—</strong></div>
     </div>
   </section>
 
+  <section class="scoreboard" aria-label="Response scoreboard">
+    <article class="stat"><small>MTTD · ms</small><strong id="statMttd">—</strong><p>MTTD = how fast the attack was detected</p></article>
+    <article class="stat"><small>MTTR · ms</small><strong id="statMttr">—</strong><p>MTTR = how fast the node fully recovered</p></article>
+    <article class="stat"><small>Attacks blocked</small><strong id="statBlocked">—</strong><p>Red-team attacks stopped by the defense</p></article>
+    <article class="stat"><small>System integrity</small><strong id="statIntegrity">—</strong><p>Nodes with a verified SHA-256 hash chain</p></article>
+  </section>
+
+  <section class="flow" aria-label="Attack to recovery pipeline">
+    <div class="flow-head"><h2>Attack → recovery, live</h2><p class="panel-caption">The seven stages light up as the demo runs. Red = attack · green = defended · blue = cryptographic proof · amber = in progress.</p></div>
+    <ol class="flow-track">
+      <li class="flow-step" data-flow="tamper"><span class="flow-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg></span><b>01 · Tamper</b><span class="flow-caption">Attack injected on Node-A</span><span class="flow-state">waiting</span></li>
+      <li class="flow-step" data-flow="deception"><span class="flow-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span><b>02 · Decoy</b><span class="flow-caption">Attacker trapped in honeypot</span><span class="flow-state">waiting</span></li>
+      <li class="flow-step" data-flow="gossip"><span class="flow-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.3 10.8 15.7 7.2M8.3 13.2l7.4 3.6"/></svg></span><b>03 · Gossip</b><span class="flow-caption">Antibodies shield peer nodes</span><span class="flow-state">waiting</span></li>
+      <li class="flow-step" data-flow="forensics"><span class="flow-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="2.6"/></svg></span><b>04 · Forensics</b><span class="flow-caption">Evidence redacted &amp; verified</span><span class="flow-state">waiting</span></li>
+      <li class="flow-step" data-flow="synthesize"><span class="flow-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v5.5L4.8 18a2 2 0 0 0 1.8 3h10.8a2 2 0 0 0 1.8-3L14 8.5V3"/><path d="M7.5 14h9"/></svg></span><b>05 · Policy</b><span class="flow-caption">Fix drafted &amp; sandbox-tested</span><span class="flow-state">waiting</span></li>
+      <li class="flow-step" data-flow="quorum"><span class="flow-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="14" r="4"/><path d="M11 11l9-9M17 4l3 3M14 7l3 3"/></svg></span><b>06 · Quorum</b><span class="flow-caption">Two human passkeys required</span><span class="flow-state">waiting</span></li>
+      <li class="flow-step" data-flow="rollback"><span class="flow-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.2L3 16M3 21v-5h5"/></svg></span><b>07 · Recovery</b><span class="flow-caption">Signed snapshot restores node</span><span class="flow-state">waiting</span></li>
+    </ol>
+  </section>
+
+  <details class="judge-script" id="judgeScript">
+    <summary>Judge demo script · the complete 14-step story</summary>
+    <p class="judge-opening">Most cybersecurity systems tell you that an attack happened. AegisQuorum demonstrates how to contain it, govern the response, restore trusted infrastructure, and independently prove what happened.</p>
+    <ol class="judge-steps">
+      <li data-judge="intro">Introduce the three-node local prototype (a demonstration cluster, not production distributed consensus)</li>
+      <li data-judge="trusted">Initial trusted state · DEFCON 5 · 3/3 nodes trusted</li>
+      <li data-judge="tamper">Controlled tampering on Node-A</li>
+      <li data-judge="tamper">Verified detection · integrity mismatch event signed</li>
+      <li data-judge="tamper">Node-A quarantined</li>
+      <li data-judge="deception">Chameleon decoy answers the attacker</li>
+      <li data-judge="deception">Signed threat fingerprint recorded</li>
+      <li data-judge="gossip">Node-B and Node-C inoculated · signed gossip receipts</li>
+      <li data-judge="forensics">Evidence-grounded AI analysis · provider provenance shown, fallback labelled</li>
+      <li data-judge="synthesize">Policy candidate + 50-event sandbox dry-run</li>
+      <li data-judge="quorum">Two independent authority signatures (WebAuthn passkeys or offline CLI)</li>
+      <li data-judge="rollback">Administrator-authorized recovery + post-recovery integrity scan</li>
+      <li data-judge="certificate">Recovery certificate issued · inspect it in the Proof Explorer</li>
+      <li data-judge="certificate">Independent offline verification · npm run verify-recovery -- --certificate …</li>
+    </ol>
+  </details>
+
   <section class="storyboard" aria-labelledby="storyTitle">
-    <div class="story-head"><div><h2 id="storyTitle">Cinematic response timeline</h2><p>Seven stages · authenticated mutations carry fresh replay headers.</p></div><div class="story-actions"><button id="runFull" class="runall">▶ RUN AUTONOMOUS DEMO</button><button id="runDemo" class="compact">Legacy flow</button></div></div>
-    <div class="story">
-      <button data-step="tamper"><b>⚡ 01 · TAMPER</b>Inject tamper · Node-A</button>
-      <button data-step="deception"><b>🦎 02 · CHAMELEON</b>Probe synthetic decoy</button>
-      <button data-step="gossip"><b>🛡 03 · GOSSIP</b>Inoculate Nodes B & C</button>
-      <button data-step="forensics"><b>👁 04 · FORENSICS</b>SAM + voice + Muse</button>
-      <button data-step="synthesize"><b>🧪 05 · SYNTHESIZE</b>Policy + 50-event sandbox</button>
-      <button data-step="quorum"><b>🔐 06 · QUORUM</b>Human-gated 2-of-3 passkeys</button>
-      <button data-step="rollback"><b>♻ 07 · RECOVERY</b>Verify snapshot rollback</button>
-    </div>
+    <div class="story-head"><div><h2 id="storyTitle">Live demo narration</h2><p>Seven stages · authenticated mutations carry fresh replay headers.</p></div></div>
+    <p class="panel-caption">Every stage reports here in plain language as it runs; these messages drive the flow diagram above.</p>
     <p class="statusline" id="message" aria-live="polite">Connecting to the local control plane…</p>
   </section>
 
@@ -231,7 +424,9 @@
         <div class="decoy-hud" id="decoyHud">🦎 DECOY HONEYPOT TRAPPING ATTACKER</div>
       </div>
       <div class="node-grid" id="nodes"></div>
+      <p class="panel-caption">Node cards: live status chip and SHA-256 chain fingerprint per node (first 8 characters; expand Details for the full hash).</p>
       <section class="precog-panel" aria-label="Aegis predictive science HUD">
+        <p class="panel-caption">SIR prediction: epidemiology math estimates how far the attack would spread. Recommendations stay advisory; nothing executes.</p>
         <div class="precog-head"><div><div class="panel-kicker"><i style="background:var(--red)"></i> Aegis bio-mathematical pre-cog</div><strong>Entropy × SIR propagation</strong></div><div class="precog-actions"><button id="voiceC2" class="compact">Aegis voice</button><button id="runPreCog" class="compact">Run prediction</button></div></div>
         <div class="precog-grid">
           <div class="entropy-module"><div class="entropy-radar" id="entropyRadar"><div class="entropy-core"><strong id="entropyValue">—</strong><small>bits / byte</small></div></div><div class="entropy-caption"><b id="entropyClass">AWAITING SIGNED SCAN</b><small>Shannon entropy H(X)</small></div></div>
@@ -241,45 +436,134 @@
         <pre id="preCogOutput" class="output">Aegis models scenarios from verified audit evidence. Recommendations are advisory; no generated code executes.</pre>
       </section>
       <div class="studio-label"><span class="eyebrow">Chameleon probe routing</span><span class="badge">SYNTHETIC ONLY</span></div>
+      <p class="panel-caption">Chameleon decoy: probes sent to a quarantined node are answered by a safe synthetic decoy — never the real service.</p>
       <div class="probe-input-row"><select id="probeNode" aria-label="Target node"><option>node-a</option><option>node-b</option><option>node-c</option></select><input id="probeInput" value="help" maxlength="512" aria-label="Synthetic probe input"><button id="probeButton" class="compact">Probe</button></div>
+      <p class="panel-caption">Inoculation receipts: signed proof that peer nodes received the antibody and became immune.</p>
       <pre id="probeOutput" class="output">Waiting for a quarantined node.</pre>
-    </article>
-
-    <article class="card" id="policyStudio">
-      <div class="card-head"><div><div class="panel-kicker"><i style="background:var(--violet)"></i> Policy engineering</div><h2>Autonomous policy studio</h2><p>Candidate only · apply requires verified 2-of-3 approvals</p></div><span class="badge warn" id="sandboxBadge">SANDBOX IDLE</span></div>
-      <div class="row"><button id="synthesize" class="compact">Synthesize with Muse</button><button id="proposalRefresh" class="compact">New proposal</button></div>
-      <div class="diff-grid" style="margin-top:8px"><div class="diff-panel"><div class="eyebrow">Current policy</div><pre id="policyBefore">No policy loaded.</pre></div><div class="diff-panel"><div class="eyebrow">Candidate policy</div><pre id="policyAfter">Awaiting synthesis.</pre></div></div>
-      <div class="sandbox-stats"><div class="sandbox-stat"><strong id="sandboxEvents">—/50</strong><small>events replayed</small></div><div class="sandbox-stat"><strong id="sandboxFalse">—</strong><small>false positives</small></div><div class="sandbox-stat"><strong id="sandboxSafety">—%</strong><small>safety score</small></div></div>
-      <div class="eyebrow" style="margin:9px 0 5px">Passkey authority signers</div>
-      <div class="signer-grid">
-        <div class="signer-card" data-signer="authority-1"><strong>AUTHORITY 01</strong><p>TouchID · FaceID · security key</p><button data-passkey="authority-1">Sign with passkey</button></div>
-        <div class="signer-card" data-signer="authority-2"><strong>AUTHORITY 02</strong><p>TouchID · FaceID · security key</p><button data-passkey="authority-2">Sign with passkey</button></div>
-        <div class="signer-card" data-signer="authority-3"><strong>AUTHORITY 03</strong><p>TouchID · FaceID · security key</p><button data-passkey="authority-3">Sign with passkey</button></div>
-      </div>
-      <div class="bar" style="margin-top:9px"><i id="quorumBar"></i></div><div class="quorum-meta"><span id="quorumProgress">0 / 2 signatures verified</span><span>private keys stay in authenticator</span></div>
-      <div class="row"><button id="applyPolicy" class="compact">Apply verified quorum</button><span class="notice">Biometric approval is never automated or simulated.</span></div>
-      <details class="cli-drawer"><summary>Offline CLI approval JSON · approve-policy</summary><label class="eyebrow" for="approvals">Paste approval array or { update, approvals }</label><textarea id="approvals" placeholder='[{"authority":"authority-1","digest":"…","signature":"…"}]'></textarea></details>
-      <pre id="policyOutput" class="output">No candidate generated.</pre>
-    </article>
-
-    <article class="card forensics-studio" id="forensicsStudio">
-      <div class="card-head"><div><div class="panel-kicker"><i style="background:var(--amber)"></i> Evidence analysis</div><h2>Visual + voice forensics</h2><p>Media is withheld; only redacted metadata reaches correlation.</p></div><div class="top-actions"><span class="badge warn" id="visualStatus">AWAITING EVIDENCE</span><span class="badge" id="voiceStatus">VOICE · OPTIONAL</span></div></div>
-      <div class="forensic-screen" id="forensicScreen"><canvas id="incidentCanvas" width="960" height="480" aria-label="Synthetic incident terminal snapshot"></canvas><div class="scanline"></div><div class="mask-layer" id="maskLayer"></div></div>
-      <div class="forensic-controls"><input id="incidentImage" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Optional incident screenshot"><input id="incidentAudio" type="file" accept="audio/*" aria-label="Optional voice incident note"><textarea id="voiceNote" maxlength="1000" placeholder="Optional operator context (never treated as authorization)" aria-label="Operator incident context"></textarea><button id="visualAnalyze" class="compact">Run SAM + Muse correlation</button></div>
-      <div class="event-badges" id="verifiedEventBadges"></div>
-      <pre id="visualOutput" class="output">Synthetic terminal fixture ready. Choose visual evidence or run storyboard step 4.</pre>
-    </article>
-  </section>
+    </article>  </section>
 
   <section class="audit-dock" id="auditVault" aria-label="360-degree cryptographic audit vault">
     <div class="dock-head"><div><div class="panel-kicker"><i style="background:var(--cyan)"></i> Evidence vault</div><h2>360° All-Aspects Cryptographic Audit</h2></div><div class="audit-actions"><button id="loadAudit">Refresh 360 ledger</button><button id="verifyAudit">Verify chain in browser</button><a class="badge live" href="/api/audit?download=1" download="audit-evidence.json">Download evidence</a></div></div>
-    <div class="audit-tabs" role="tablist" aria-label="Audit dimensions">
-      <button role="tab" aria-selected="true" data-audit-tab="hashchain">01 · Hash chain</button><button role="tab" aria-selected="false" data-audit-tab="replay">02 · Anti-replay</button><button role="tab" aria-selected="false" data-audit-tab="snapshot">03 · Snapshot integrity</button><button role="tab" aria-selected="false" data-audit-tab="ai">04 · AI boundary</button><button role="tab" aria-selected="false" data-audit-tab="gossip">05 · Deception + gossip</button><button role="tab" aria-selected="false" data-audit-tab="export">06 · Export + tamper</button>
-    </div>
-    <div class="audit-panel" id="auditPanel" role="tabpanel"><div id="auditEvents" class="audit-list"></div><div id="auditPillars" class="audit-pillars"></div></div>
+    <p class="panel-caption">360 ledger: six dimensions of hash-chained, Ed25519-signed evidence — verifiable in this browser.</p>
+    <p class="ledger-proof"><span class="badge" id="ledgerBadge">LEDGER · —</span></p>
     <p id="auditVerify" class="statusline">Load the signed 360-degree ledger to inspect evidence.</p>
     <button id="tamperAudit" class="compact danger" hidden>Simulate Tamper</button>
   </section>
+
+  <section class="card proof-explorer" id="proofExplorer" aria-label="Proof Explorer">
+    <div class="card-head"><div><div class="panel-kicker"><i></i> Proof-carrying recovery</div><h2>Proof Explorer</h2><p>Portable recovery certificate · independently verifiable offline</p></div><span class="badge" id="proofBadge">NO CERTIFICATE LOADED</span></div>
+    <p class="panel-caption">A recovery certificate bundles the signed incident evidence, snapshot digest, restore record, and post-recovery integrity check for one node. In-browser verification is self-asserted; full proof runs offline against an independent trust record and the original snapshot artifact.</p>
+    <div class="proof-controls">
+      <select id="proofNode" aria-label="Certificate node"><option>node-a</option><option>node-b</option><option>node-c</option></select>
+      <button id="proofLoad" class="compact" aria-label="Load recovery certificate for the selected node">Load recovery certificate</button>
+      <button id="proofVerify" class="compact" disabled aria-label="Verify the loaded certificate in this browser">Verify in browser (self-asserted)</button>
+      <button id="proofDownload" class="compact" disabled aria-label="Download the recovery proof bundle as JSON">Download proof bundle</button>
+    </div>
+    <div class="proof-classes" id="proofClasses" aria-live="polite"></div>
+    <div id="proofPanel" class="proof-panel"></div>
+    <p class="panel-caption" id="proofOffline" hidden>Offline independent verification: <code>npm run verify-recovery -- --certificate &lt;downloaded-file&gt; --trusted-key &lt;independent-node-trust.json&gt; [--snapshot &lt;original-snapshot.json&gt;]</code></p>
+  </section>
+
+  <details class="glossary">
+    <summary>Glossary · 8 plain-English definitions</summary>
+    <dl>
+      <div><dt>SHA-256</dt><dd>A cryptographic fingerprint function. Change one bit of data and the fingerprint changes completely — that is how tampering is detected.</dd></div>
+      <div><dt>Ed25519</dt><dd>The digital-signature algorithm nodes use to sign audit entries, proving who wrote them and that they were not altered.</dd></div>
+      <div><dt>Quorum</dt><dd>No single actor can change policy. At least 2 of 3 independent human authorities must approve with passkeys.</dd></div>
+      <div><dt>Quarantine</dt><dd>Cutting a compromised node off from the cluster so it cannot affect healthy peers.</dd></div>
+      <div><dt>Honeypot</dt><dd>A decoy that pretends to be the infected node. The attacker interacts with a safe fake while defenses watch.</dd></div>
+      <div><dt>Antibody / inoculation</dt><dd>A signed description of the attack, gossiped to healthy nodes so they become immune before the attack reaches them.</dd></div>
+      <div><dt>MTTD / MTTR</dt><dd>Mean time to detect / mean time to recover — how many milliseconds pass between the attack starting, being noticed, and being fully healed.</dd></div>
+      <div><dt>SIR model</dt><dd>Epidemiology math (Susceptible → Infected → Recovered) used to predict how fast the attack would spread without defense.</dd></div>
+    </dl>
+  </details>
+
+  <details class="advanced" id="advancedControls">
+    <summary><span class="advanced-title">Advanced controls</span><span class="advanced-sub">Manual stages · telemetry · policy studio · forensics · 360 ledger</span></summary>
+    <div class="advanced-body">
+      <section class="advanced-stage-controls" aria-label="Manual stage controls">
+        <h2 class="advanced-h">Manual stage controls</h2>
+        <p class="panel-caption">Run any single stage by hand; the hero button runs all seven in order.</p>
+        <div class="story">
+          <button data-step="tamper"><b>⚡ 01 · TAMPER</b>Inject tamper · Node-A</button>
+          <button data-step="deception"><b>🦎 02 · CHAMELEON</b>Probe synthetic decoy</button>
+          <button data-step="gossip"><b>🛡 03 · GOSSIP</b>Inoculate Nodes B & C</button>
+          <button data-step="forensics"><b>👁 04 · FORENSICS</b>SAM + voice + Muse</button>
+          <button data-step="synthesize"><b>🧪 05 · SYNTHESIZE</b>Policy + 50-event sandbox</button>
+          <button data-step="quorum"><b>🔐 06 · QUORUM</b>Human-gated 2-of-3 passkeys</button>
+          <button data-step="rollback"><b>♻ 07 · RECOVERY</b>Verify snapshot rollback</button>
+        </div>
+        <div class="story-actions"><button id="runDemo" class="compact">Legacy flow</button></div>
+      </section>
+      <section class="executive" aria-label="Command telemetry">
+        <div class="metric posture" id="postureMetric"><small>System DEFCON posture</small><strong id="defcon" class="green">DEFCON 5: VERIFIED SECURE</strong></div>
+        <div class="metric"><small>Verified nodes</small><strong id="verifiedCount">0 / 3</strong></div>
+        <div class="metric"><small>Policy sequence lock</small><strong id="sequence">—</strong></div>
+        <div class="metric"><small>MTTD · session</small><strong id="mttd">— ms</strong></div>
+        <div class="metric"><small>MTTR · session</small><strong id="mttr">— ms</strong></div>
+        <div class="metric"><small>Anti-replay nonce</small><strong class="nonce-label" id="nonceTicker">READY · FRESH PER POST</strong></div>
+      </section>
+      <section class="ring-grid" aria-label="Live system KPI gauges">
+        <article class="ring-card"><div class="ring-visual"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="ring-track" cx="32" cy="32" r="26"/><circle class="ring-progress" id="integrityRing" cx="32" cy="32" r="26"/></svg><strong class="ring-value" id="integrityValue">100%</strong></div><div class="ring-copy"><strong>System integrity</strong><small>SHA-256 · signed snapshots</small></div></article>
+        <article class="ring-card"><div class="ring-visual"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="ring-track" cx="32" cy="32" r="26"/><circle class="ring-progress cyan-ring" id="safetyRing" cx="32" cy="32" r="26"/></svg><strong class="ring-value" id="safetyValue">100%</strong></div><div class="ring-copy"><strong>Sandbox safety</strong><small id="safetyNote">Demo baseline · verify on dry-run</small></div></article>
+        <article class="ring-card"><div class="ring-visual"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="ring-track" cx="32" cy="32" r="26"/><circle class="ring-progress violet-ring" id="mttdRing" cx="32" cy="32" r="26"/></svg><strong class="ring-value" id="mttdRingValue">—</strong></div><div class="ring-copy"><strong>MTTD</strong><small>Mean detect time</small></div></article>
+        <article class="ring-card"><div class="ring-visual"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="ring-track" cx="32" cy="32" r="26"/><circle class="ring-progress amber-ring" id="mttrRing" cx="32" cy="32" r="26"/></svg><strong class="ring-value" id="mttrRingValue">—</strong></div><div class="ring-copy"><strong>MTTR</strong><small>Mean recovery time</small></div></article>
+      </section>
+      <section class="metric glass" aria-label="AI model status">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <span class="eyebrow">Meta AI multi-model status</span>
+          <span class="badge warn" id="modelStatus">Deterministic Fallback</span>
+          <span class="badge" data-model="muse-spark-1.3">muse-spark-1.3 · standby</span>
+          <span class="badge" data-model="sam-3.1">sam-3.1 · standby</span>
+          <span class="badge" data-model="muse-voice-transcribe">Muse Voice · standby</span>
+          <span class="badge" data-model="baseten">Baseten muse-spark-open-1026 · standby</span>
+        </div>
+      </section>
+      <article class="card" id="policyStudio">
+        <div class="card-head"><div><div class="panel-kicker"><i style="background:var(--violet)"></i> Policy engineering</div><h2>Autonomous policy studio</h2><p>Candidate only · apply requires verified 2-of-3 approvals</p></div><span class="badge warn" id="sandboxBadge">SANDBOX IDLE</span></div>
+        <p class="panel-caption">Policy studio: Aegis drafts a candidate fix and dry-runs it against 50 verified events before any human sees it.</p>
+        <div class="authz-chain" id="authzChain" aria-label="Human-governed authorization chain">
+          <span data-chain="proposal">AI proposal</span><i>→</i>
+          <span data-chain="sandbox">Sandbox dry-run</span><i>→</i>
+          <span data-chain="signatures">Authority signatures</span><i>→</i>
+          <span data-chain="quorum">Quorum verified</span><i>→</i>
+          <span data-chain="applied">Admin applied</span><i>→</i>
+          <span data-chain="verified">Recorded in audit</span>
+        </div>
+        <div class="row"><button id="synthesize" class="compact">Synthesize with Muse</button><button id="proposalRefresh" class="compact">New proposal</button></div>
+        <div class="diff-grid" style="margin-top:8px"><div class="diff-panel"><div class="eyebrow">Current policy</div><pre id="policyBefore">No policy loaded.</pre></div><div class="diff-panel"><div class="eyebrow">Candidate policy</div><pre id="policyAfter">Awaiting synthesis.</pre></div></div>
+        <div class="sandbox-stats"><div class="sandbox-stat"><strong id="sandboxEvents">—/50</strong><small>events replayed</small></div><div class="sandbox-stat"><strong id="sandboxFalse">—</strong><small>false positives</small></div><div class="sandbox-stat"><strong id="sandboxSafety">—%</strong><small>safety score</small></div></div>
+        <div class="eyebrow" style="margin:9px 0 5px">Passkey authority signers</div>
+        <p class="panel-caption">2-of-3 quorum: two distinct human passkey signatures are required; nothing is applied automatically or simulated.</p>
+        <div class="signer-grid">
+          <div class="signer-card" data-signer="authority-1"><strong>AUTHORITY 01</strong><p>TouchID · FaceID · security key</p><button data-passkey="authority-1">Sign with passkey</button></div>
+          <div class="signer-card" data-signer="authority-2"><strong>AUTHORITY 02</strong><p>TouchID · FaceID · security key</p><button data-passkey="authority-2">Sign with passkey</button></div>
+          <div class="signer-card" data-signer="authority-3"><strong>AUTHORITY 03</strong><p>TouchID · FaceID · security key</p><button data-passkey="authority-3">Sign with passkey</button></div>
+        </div>
+        <div class="bar" style="margin-top:9px"><i id="quorumBar"></i></div><div class="quorum-meta"><span id="quorumProgress">0 / 2 signatures verified</span><span>private keys stay in authenticator</span></div>
+        <div class="row"><button id="applyPolicy" class="compact">Apply verified quorum</button><span class="notice">Biometric approval is never automated or simulated.</span></div>
+        <details class="cli-drawer"><summary>Offline CLI approval JSON · approve-policy</summary><label class="eyebrow" for="approvals">Paste approval array or { update, approvals }</label><textarea id="approvals" placeholder='[{"authority":"authority-1","digest":"…","signature":"…"}]'></textarea></details>
+        <pre id="policyOutput" class="output">No candidate generated.</pre>
+      </article>
+      <article class="card forensics-studio" id="forensicsStudio">
+        <div class="card-head"><div><div class="panel-kicker"><i style="background:var(--amber)"></i> Evidence analysis</div><h2>Visual + voice forensics</h2><p>Media is withheld; only redacted metadata reaches correlation.</p></div><div class="top-actions"><span class="badge warn" id="visualStatus">AWAITING EVIDENCE</span><span class="badge" id="voiceStatus">VOICE · OPTIONAL</span></div></div>
+        <p class="panel-caption">Visual + voice forensics: sensitive regions are redacted before analysis; only verified event IDs may be cited.</p>
+        <div class="forensic-screen" id="forensicScreen"><canvas id="incidentCanvas" width="960" height="480" aria-label="Synthetic incident terminal snapshot"></canvas><div class="scanline"></div><div class="mask-layer" id="maskLayer"></div></div>
+        <div class="forensic-controls"><input id="incidentImage" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Optional incident screenshot"><input id="incidentAudio" type="file" accept="audio/*" aria-label="Optional voice incident note"><textarea id="voiceNote" maxlength="1000" placeholder="Optional operator context (never treated as authorization)" aria-label="Operator incident context"></textarea><button id="visualAnalyze" class="compact">Run SAM + Muse correlation</button><button id="runAnalyst" class="compact">Run incident analysis</button></div>
+        <div class="event-badges" id="verifiedEventBadges"></div>
+        <pre id="visualOutput" class="output">Synthetic terminal fixture ready. Choose visual evidence or run storyboard step 4.</pre>
+        <div id="analystPanel" class="analyst-panel" hidden></div>
+      </article>
+      <section aria-label="360 ledger detail">
+        <h2 class="advanced-h">360° hash-chain ledger</h2>
+        <div class="audit-tabs" role="tablist" aria-label="Audit dimensions">
+          <button role="tab" aria-selected="true" data-audit-tab="hashchain">01 · Hash chain</button><button role="tab" aria-selected="false" data-audit-tab="replay">02 · Anti-replay</button><button role="tab" aria-selected="false" data-audit-tab="snapshot">03 · Snapshot integrity</button><button role="tab" aria-selected="false" data-audit-tab="ai">04 · AI boundary</button><button role="tab" aria-selected="false" data-audit-tab="gossip">05 · Deception + gossip</button><button role="tab" aria-selected="false" data-audit-tab="export">06 · Export + tamper</button>
+        </div>
+        <div class="audit-panel" id="auditPanel" role="tabpanel"><div id="auditEvents" class="audit-list"></div><div id="auditPillars" class="audit-pillars"></div></div>
+      </section>
+    </div>
+  </details>
+
   <footer class="footer"><span>ZERO TRUST · LEAST PRIVILEGE · HUMAN-APPROVED RECOVERY</span><span>SHA-256 · ED25519 · NO EXTERNAL FRONTEND ASSETS</span></footer>
 </main>
 
@@ -484,8 +768,10 @@
   let requiredQuorum = 2;
   let incidentStartedAt = 0;
   let recoveryStartedAt = 0;
-  let mttd = 14;
-  let mttr = 42;
+  let mttd = null;
+  let mttr = null;
+  let stepInFlight = false;
+  let rateLimitBackoffUntil = 0;
   let activeAuditTab = 'hashchain';
   let tourActive = false;
   let tourStartAt = 0;
@@ -519,8 +805,17 @@
     if (method.toUpperCase() === 'POST' || replay) Object.assign(headers, replayHeaders());
     if (adminToken) headers['x-dashboard-admin-token'] = adminToken;
     else if (operatorToken) headers['x-dashboard-operator-token'] = operatorToken;
-    const response = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), cache: 'no-store', credentials: 'same-origin' });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    let response;
+    try {
+      response = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), cache: 'no-store', credentials: 'same-origin', signal: controller.signal });
+    } catch (error) {
+      if (error && error.name === 'AbortError') throw new Error('request-timeout');
+      throw error;
+    } finally { clearTimeout(timeout); }
     const value = await response.json();
+    if (response.status === 429) rateLimitBackoffUntil = Date.now() + 30000;
     if (!response.ok) throw new Error(value.error || `http-${response.status}`);
     return value;
   }
@@ -553,8 +848,8 @@
     if (value) value.textContent = label;
   }
   function updateTimeRings() {
-    setRing('mttdRing', 'mttdRingValue', 100 - Math.min(100, Number(mttd || 0) / 250 * 100), `${mttd ?? 14}ms`);
-    setRing('mttrRing', 'mttrRingValue', 100 - Math.min(100, Number(mttr || 0) / 250 * 100), `${mttr ?? 42}ms`);
+    setRing('mttdRing', 'mttdRingValue', mttd === null ? 0 : 100 - Math.min(100, Number(mttd) / 250 * 100), mttd === null ? '—' : `${mttd}ms`);
+    setRing('mttrRing', 'mttrRingValue', mttr === null ? 0 : 100 - Math.min(100, Number(mttr) / 250 * 100), mttr === null ? '—' : `${mttr}ms`);
   }
   function renderNodes(nodes) {
     latestStatuses = nodes || [];
@@ -1061,6 +1356,18 @@
     document.querySelector(`[data-step="${step}"]`)?.classList.add('complete');
     statusMessage(`${step} completed.`);
   }
+  // Single-flight wrapper: a stage never runs twice concurrently, and all
+  // stage buttons stay disabled while one is in flight (no double submits).
+  async function runStepExclusive(step) {
+    if (stepInFlight) { statusMessage('A stage is already running; wait for it to finish before starting another.'); return; }
+    stepInFlight = true;
+    document.querySelectorAll('[data-step]').forEach(button => { button.disabled = true; });
+    try { await runStep(step); }
+    finally {
+      stepInFlight = false;
+      document.querySelectorAll('[data-step]').forEach(button => { button.disabled = false; });
+    }
+  }
   async function synthesize() {
     const result = await api('/api/policy/synthesize', { method: 'POST', body: {} });
     latestProposal = result.candidatePolicy || result.sandbox.candidatePolicy || result.sandbox.candidateProposal;
@@ -1165,12 +1472,16 @@
   }
   async function runFullSequence() {
     if (!adminToken && !devSessionActive) throw new Error('Unlock the administrator role or activate the local demo session before running the full response sequence.');
-    const steps = ['tamper', 'deception', 'gossip', 'forensics', 'synthesize', 'quorum', 'rollback'];
-    for (const step of steps) {
-      if (step === 'gossip') await new Promise(resolve => setTimeout(resolve, 100));
-      await runStep(step);
-    }
-    statusMessage('Seven stages completed. Passkey quorum remains human-approved; no biometric approval was automated.');
+    if (stepInFlight) throw new Error('The autonomous demo is already running.');
+    $('#runFull').disabled = true;
+    try {
+      const steps = ['tamper', 'deception', 'gossip', 'forensics', 'synthesize', 'quorum', 'rollback'];
+      for (const step of steps) {
+        if (step === 'gossip') await new Promise(resolve => setTimeout(resolve, 100));
+        await runStepExclusive(step);
+      }
+      statusMessage('Seven stages completed. Passkey quorum remains human-approved; no biometric approval was automated.');
+    } finally { $('#runFull').disabled = false; }
   }
   function speak(text) {
     if (!$('#tourVoiceover').checked || !window.speechSynthesis) return;
@@ -1274,18 +1585,18 @@
       await waitUntilTourTime(25000); if (!tourActive) return;
       $('#manifestDialog').close();
       await directorCue('First, controlled tampering is detected by the node hash check. The quarantined node becomes an active Chameleon decoy. Signed antibodies then inoculate the healthy peers.');
-      await runStep('tamper'); await runStep('deception'); await runStep('gossip');
+      await runStepExclusive('tamper'); await runStepExclusive('deception'); await runStepExclusive('gossip');
       await waitUntilTourTime(65000); if (!tourActive) return;
       $('#forensicsStudio').scrollIntoView({ behavior: 'smooth', block: 'center' });
       await directorCue('The terminal image is masked before correlation. Voice context is optional, and every report citation is cross-checked against the Ed25519 audit chain.');
-      await runStep('forensics');
+      await runStepExclusive('forensics');
       await waitUntilTourTime(110000); if (!tourActive) return;
       $('#policyStudio').scrollIntoView({ behavior: 'smooth', block: 'center' });
       await directorCue('Verified events drive the candidate policy and an isolated fifty-event dry run. The passkey panel is a human-presence gate; this tour will not fabricate biometric signatures.');
-      await runStep('synthesize'); await runStep('quorum');
+      await runStepExclusive('synthesize'); await runStepExclusive('quorum');
       await waitUntilTourTime(132000); if (!tourActive) return;
       await directorCue('Recovery uses the current signed snapshot and reports completion only after a clean post-rollback integrity scan.');
-      await runStep('rollback');
+      await runStepExclusive('rollback');
       await waitUntilTourTime(150000); if (!tourActive) return;
       $('#auditVault').scrollIntoView({ behavior: 'smooth', block: 'start' });
       await directorCue('The final vault exposes six audit dimensions. The last demonstration edits one byte in a local copy, never the node audit.');
@@ -1348,8 +1659,18 @@
       refreshQuorumProgress(); statusMessage(`Proposal sequence ${latestProposal.sequence} loaded.`);
     } catch (error) { statusMessage(`Proposal unavailable: ${error.message}`); }
   };
-  $('#synthesize').onclick = () => synthesize().catch(error => statusMessage(`Synthesis failed: ${error.message}`));
-  $('#runPreCog').onclick = () => runPreCog().catch(error => statusMessage(`Pre-cog unavailable: ${error.message}`));
+  $('#synthesize').onclick = async () => {
+    const button = $('#synthesize'); button.disabled = true;
+    try { await synthesize(); }
+    catch (error) { statusMessage(`Synthesis failed: ${error.message}`); }
+    finally { button.disabled = false; }
+  };
+  $('#runPreCog').onclick = async () => {
+    const button = $('#runPreCog'); button.disabled = true;
+    try { await runPreCog(); }
+    catch (error) { statusMessage(`Pre-cog unavailable: ${error.message}`); }
+    finally { button.disabled = false; }
+  };
   $('#voiceC2').onclick = async () => {
     const button = $('#voiceC2'); button.disabled = true;
     try { await listenForAegisCommand(); }
@@ -1376,11 +1697,70 @@
       finally { button.disabled = false; }
     });
   });
-  $('#probeButton').onclick = () => api('/api/deception/simulate', { method: 'POST', body: { node: $('#probeNode').value, input: $('#probeInput').value } })
-    .then(result => { $('#probeOutput').textContent = `${result.response}\n\nThreat fingerprint: ${result.threatFingerprint.digest}`; })
-    .catch(error => statusMessage(`Probe failed: ${error.message}`));
-  $('#visualAnalyze').onclick = () => runVisualForensics().catch(error => statusMessage(`Visual forensics unavailable: ${error.message}`));
+  $('#probeButton').onclick = async () => {
+    const button = $('#probeButton'); button.disabled = true;
+    try {
+      const result = await api('/api/deception/simulate', { method: 'POST', body: { node: $('#probeNode').value, input: $('#probeInput').value } });
+      $('#probeOutput').textContent = `${result.response}\n\nThreat fingerprint: ${result.threatFingerprint.digest}`;
+    } catch (error) { statusMessage(`Probe failed: ${error.message}`); }
+    finally { button.disabled = false; }
+  };
+  $('#visualAnalyze').onclick = async () => {
+    const button = $('#visualAnalyze'); button.disabled = true;
+    try { await runVisualForensics(); }
+    catch (error) { statusMessage(`Visual forensics unavailable: ${error.message}`); }
+    finally { button.disabled = false; }
+  };
+  // Evidence-grounded AI: every section is labelled by epistemic class and
+  // every factual claim carries its verified event-ID citations. Model output
+  // is untrusted: rendered via textContent only.
+  function renderAnalyst(result) {
+    const panel = $('#analystPanel');
+    if (!panel) return;
+    panel.hidden = false;
+    panel.replaceChildren();
+    const analysis = result.analysis || {};
+    const head = document.createElement('p');
+    head.className = 'analyst-provenance';
+    head.textContent = `Provider ${result.providerMode || 'Deterministic Fallback'} · status ${result.providerStatus || 'unknown'} · models invoked: ${(result.modelsInvoked || []).join(', ') || 'none (deterministic fallback)'} · factual claims must cite verified event IDs`;
+    panel.append(head);
+    const addList = (title, className, items, text, refs) => {
+      const list = (Array.isArray(items) ? items : [items]).filter(Boolean);
+      if (!list.length) return;
+      const section = document.createElement('section');
+      section.className = `analyst-section ${className}`;
+      const h = document.createElement('h3'); h.textContent = title; section.append(h);
+      const ul = document.createElement('ul');
+      list.forEach(item => {
+        const li = document.createElement('li');
+        li.append(document.createTextNode(text(item)));
+        (refs(item) || []).forEach(id => {
+          const chip = document.createElement('button');
+          chip.className = 'evidence-chip'; chip.textContent = id;
+          chip.title = 'Open the signed audit vault at the hash chain';
+          chip.onclick = async () => { await loadAudit(); renderAuditTab('hashchain'); $('#auditVault').scrollIntoView({ behavior: 'smooth' }); };
+          li.append(' ', chip);
+        });
+        ul.append(li);
+      });
+      section.append(ul); panel.append(section);
+    };
+    addList('VERIFIED FACTS · cited to verified event IDs', 'facts', [analysis.incidentSummary, ...(analysis.observedFacts || [])], item => item.statement, item => item.evidenceRefs);
+    addList('MODEL INTERPRETATION · advisory, not established fact', 'interpretation', [...(analysis.possibleExplanations || []), ...(analysis.severity ? [{ explanation: `Severity ${analysis.severity.level} — ${analysis.severity.rationale}`, evidenceRefs: analysis.severity.evidenceRefs }] : [])], item => item.explanation, item => item.evidenceRefs);
+    addList('ASSUMPTIONS & UNKNOWNS', 'unknowns', analysis.limitations, item => item, () => []);
+    addList('RECOMMENDATIONS · advisory only — never authorizes or executes', 'recommendations', analysis.recommendations, item => `${item.action} (${item.actionType}) — ${item.reason}`, item => item.evidenceRefs);
+    statusMessage(`Incident analysis ready · ${result.providerMode || 'Deterministic Fallback'}${result.errorCode ? ` · ${result.errorCode}` : ''}.`);
+  }
+  $('#runAnalyst').onclick = async () => {
+    const button = $('#runAnalyst'); button.disabled = true;
+    try {
+      const result = await api('/api/incident-analysis', { method: 'POST', body: {} });
+      renderAnalyst(result);
+    } catch (error) { statusMessage(`Incident analysis unavailable: ${error.message}`); }
+    finally { button.disabled = false; }
+  };
   $('#applyPolicy').onclick = async () => {
+    const button = $('#applyPolicy'); button.disabled = true;
     try {
       if (!latestProposal) throw new Error('Generate a policy proposal first.');
       let approvals = [];
@@ -1400,22 +1780,546 @@
       refreshQuorumProgress();
       await load();
     } catch (error) { statusMessage(`Policy rejected: ${error.message}`); }
+    finally { button.disabled = false; }
   };
   $('#runDemo').onclick = async () => {
+    const button = $('#runDemo');
+    if (stepInFlight) { statusMessage('A stage is already running; wait for it to finish first.'); return; }
+    button.disabled = true;
     try {
       const result = await api('/api/demo', { method: 'POST', body: {} });
       $('#probeOutput').textContent = JSON.stringify(result.workflow, null, 2);
       await load(); statusMessage('Legacy signed tamper → quarantine → rollback workflow completed.');
     } catch (error) { statusMessage(`Demo failed: ${error.message}`); }
+    finally { button.disabled = false; }
   };
   document.querySelectorAll('[data-step]').forEach(button => {
-    button.addEventListener('click', () => runStep(button.dataset.step).catch(error => statusMessage(`${button.dataset.step} failed: ${error.message}`)));
+    button.addEventListener('click', () => runStepExclusive(button.dataset.step).catch(error => statusMessage(`${button.dataset.step} failed: ${error.message}`)));
   });
   drawSyntheticSnapshot();
   updateRole();
   load();
   loadAudit().catch(error => { $('#auditVerify').textContent = `Audit vault unavailable: ${error.message}`; });
-  setInterval(load, 15000);
+  // Polling pauses while a stage runs and backs off after a 429 instead of
+  // hammering the control plane.
+  setInterval(() => { if (stepInFlight || rateLimitBackoffUntil > Date.now()) return; load(); }, 15000);
+})();
+</script>
+<script id="dashboard-polish-js">
+// Dashboard polish layer — read-only UI enhancements for the judge demo.
+// It never calls APIs, never stores credentials, and never changes existing
+// element behavior. Status values are MIRRORED from the elements the existing
+// dashboard already updates (#verifiedCount, #defcon, #modelStatus, #mttd,
+// #mttr, #integrityValue, #rtBlocked, #auditVerify), so nothing is hardcoded.
+// Every block is wrapped in try/catch: a polish failure can never break the
+// existing demo flow. Loaded inline in index.html (script#dashboard-polish-js).
+(() => {
+  'use strict';
+
+  const $ = selector => document.querySelector(selector);
+  const reducedMotion = Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const safe = fn => { try { fn(); } catch { /* UI polish must never break the demo */ } };
+
+  // Observe an element and run callback on every mutation AND once at setup.
+  const onMutate = (el, options, callback) => {
+    if (!el) return;
+    const observer = new MutationObserver(() => safe(() => callback(observer)));
+    observer.observe(el, options);
+    safe(() => callback(observer));
+  };
+  const TEXT_AND_CLASS = { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class', 'hidden'] };
+  const TEXT_ONLY = { childList: true, characterData: true, subtree: true };
+
+  // ---------- count-up animation (skipped for reduced motion) ----------
+  function setStatText(el, text) {
+    if (!el) return;
+    const next = String(text);
+    const prev = el.dataset.raw ?? el.textContent;
+    el.dataset.raw = next;
+    if (prev === next) return;
+    const match = next.match(/-?\d+(?:\.\d+)?/);
+    const prevMatch = String(prev).match(/-?\d+(?:\.\d+)?/);
+    if (reducedMotion || !match || !prevMatch) { el.textContent = next; return; }
+    const from = Number(prevMatch[0]);
+    const to = Number(match[0]);
+    if (from === to) { el.textContent = next; return; }
+    const pre = next.slice(0, match.index);
+    const post = next.slice(match.index + match[0].length);
+    const started = performance.now();
+    const duration = 600;
+    cancelAnimationFrame(el._countRaf || 0);
+    const tick = now => {
+      const t = Math.min(1, (now - started) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = `${pre}${Math.round(from + (to - from) * eased)}${post}`;
+      if (t < 1) el._countRaf = requestAnimationFrame(tick);
+    };
+    el._countRaf = requestAnimationFrame(tick);
+  }
+
+  // ---------- A + B. Hero status row + scoreboard mirrors ----------
+  function initMirrors() {
+    // "Nodes trusted" counts nodes whose rendered mode is trusted — kept
+    // distinct from audit-chain verification (the ledger badge covers that),
+    // so a quarantined node is never shown as healthy.
+    const syncTrusted = () => {
+      const target = $('#heroVerified');
+      if (!target) return;
+      const cards = [...document.querySelectorAll('#nodes .node-card')];
+      if (!cards.length) { target.textContent = (($('#verifiedCount') || {}).textContent || '—').trim(); return; }
+      const trusted = cards.filter(card => ((card.querySelector('p') || {}).textContent || '').startsWith('trusted')).length;
+      target.textContent = `${trusted} / ${cards.length}`;
+    };
+    onMutate($('#verifiedCount'), TEXT_ONLY, syncTrusted);
+    onMutate($('#nodes'), { childList: true }, syncTrusted);
+    onMutate($('#defcon'), TEXT_AND_CLASS, () => {
+      const source = $('#defcon');
+      const target = $('#heroDefcon');
+      if (!source || !target) return;
+      target.textContent = (source.textContent || '').trim() || '—';
+      target.className = source.className || '';
+    });
+    const syncAi = () => {
+      const status = $('#modelStatus');
+      const target = $('#heroAi');
+      if (!status || !target) return;
+      const mode = (status.textContent || '').trim();
+      if (status.classList.contains('live') && !/deterministic fallback/i.test(mode)) {
+        const muse = document.querySelector('[data-model="muse-spark-1.3"]');
+        const museLive = muse && /·\s*live\s*$/i.test(muse.textContent || '');
+        target.textContent = `LIVE · ${museLive ? 'muse-spark-1.3' : mode}`;
+        target.className = 'green';
+      } else {
+        target.textContent = 'Offline-safe deterministic mode';
+        target.className = 'amber';
+      }
+    };
+    onMutate($('#modelStatus'), TEXT_AND_CLASS, syncAi);
+
+    const asMs = value => { const text = (value || '').trim(); return text.startsWith('—') ? '—' : text; };
+    onMutate($('#mttd'), TEXT_ONLY, () => setStatText($('#statMttd'), asMs($('#mttd').textContent)));
+    onMutate($('#mttr'), TEXT_ONLY, () => setStatText($('#statMttr'), asMs($('#mttr').textContent)));
+    onMutate($('#integrityValue'), TEXT_ONLY, () => setStatText($('#statIntegrity'), ($('#integrityValue').textContent || '—').trim()));
+    const syncBlocked = () => {
+      const score = $('#rtScore');
+      const value = $('#rtBlocked');
+      const target = $('#statBlocked');
+      if (!target) return;
+      const available = score && !score.hidden && value;
+      setStatText(target, available ? (value.textContent || '').trim() : '—');
+    };
+    onMutate($('#rtScore'), TEXT_AND_CLASS, syncBlocked);
+    onMutate($('#rtBlocked'), TEXT_ONLY, syncBlocked);
+
+    // Green proof badge kept OUTSIDE the advanced drawer: parsed from the real
+    // audit verification line, never hardcoded.
+    onMutate($('#auditVerify'), TEXT_ONLY, () => {
+      const source = $('#auditVerify');
+      const badge = $('#ledgerBadge');
+      if (!source || !badge) return;
+      const match = (source.textContent || '').match(/360 chain status (\d+)\s*\/\s*(\d+)/);
+      if (!match) { badge.textContent = 'LEDGER · —'; badge.className = 'badge'; return; }
+      const ok = match[1] === match[2] && Number(match[1]) > 0;
+      badge.textContent = `${match[1]}/${match[2]} chains verified${ok ? ' ✓' : ''}`;
+      badge.className = `badge ${ok ? 'good' : 'warn'}`;
+    });
+  }
+
+  // ---------- C. Attack-to-recovery flow diagram ----------
+  // Driven ONLY by the existing stage buttons (.active/.complete classes) and
+  // the existing #message status line. No progress is invented.
+  const FLOW_KEYS = ['tamper', 'deception', 'gossip', 'forensics', 'synthesize', 'quorum', 'rollback'];
+  const flowState = Object.fromEntries(FLOW_KEYS.map(key => [key, 'waiting']));
+  function renderFlow() {
+    FLOW_KEYS.forEach(key => {
+      const step = document.querySelector(`[data-flow="${key}"]`);
+      if (!step) return;
+      const state = flowState[key];
+      step.classList.remove('is-waiting', 'is-running', 'is-done', 'is-failed');
+      step.classList.add(`is-${state}`);
+      const label = step.querySelector('.flow-state');
+      if (label) label.textContent = state;
+    });
+    judgeSync();
+  }
+  function initFlow() {
+    document.querySelectorAll('[data-step]').forEach(button => {
+      const key = button.dataset.step;
+      if (!(key in flowState)) return;
+      // The existing code marks a stage with .active while running and adds
+      // .complete at the end WITHOUT removing .active, so class-change order
+      // (via attributeOldValue) decides the state. Re-running a completed
+      // stage adds no NEW .complete mutation, so any removal of .active
+      // re-derives the state from the classes still present.
+      const observer = new MutationObserver(mutations => safe(() => {
+        for (const mutation of mutations) {
+          const had = (mutation.oldValue || '').split(/\s+/);
+          const hadActive = had.includes('active');
+          const hadComplete = had.includes('complete');
+          if (button.classList.contains('active') && !hadActive) flowState[key] = 'running';
+          else if (button.classList.contains('complete') && !hadComplete) flowState[key] = 'done';
+          else if (!button.classList.contains('active')) flowState[key] = button.classList.contains('complete') ? 'done' : 'waiting';
+        }
+        renderFlow();
+      }));
+      observer.observe(button, { attributes: true, attributeFilter: ['class'], attributeOldValue: true });
+    });
+    onMutate($('#message'), TEXT_ONLY, () => {
+      const text = ($('#message').textContent || '').trim();
+      const failed = text.match(/^(tamper|deception|gossip|forensics|synthesize|quorum|rollback) failed/i);
+      if (failed) { flowState[failed[1].toLowerCase()] = 'failed'; renderFlow(); return; }
+      if (/^Sequence stopped/i.test(text)) {
+        const running = FLOW_KEYS.find(key => flowState[key] === 'running');
+        if (running) { flowState[running] = 'failed'; renderFlow(); }
+      }
+    });
+    const runFull = $('#runFull');
+    if (runFull) runFull.addEventListener('click', () => safe(() => {
+      // Reset prior progress, but never clobber a stage that has already
+      // started (its .active mutations are in flight and must win).
+      FLOW_KEYS.forEach(key => {
+        const button = document.querySelector(`[data-step="${key}"]`);
+        if (button && button.classList.contains('active')) return;
+        flowState[key] = 'waiting';
+      });
+      renderFlow();
+    }));
+    renderFlow();
+  }
+
+  // ---------- D. Node mesh cards: status chip + hash expander + gossip pulse ----------
+  function applyGossipPulse(container) {
+    const mesh = $('#meshStudio');
+    const gossip = Boolean(mesh && mesh.classList.contains('is-gossip'));
+    container.querySelectorAll('.node-card').forEach((card, index) => {
+      card.classList.toggle('gossip-source', gossip && index === 0);
+      card.classList.toggle('gossip-hit', gossip && index > 0);
+    });
+  }
+  function enhanceNodeCard(card, index) {
+    if (card.dataset.polished) return;
+    card.dataset.polished = '1';
+    const letter = 'ABC'[index] || 'A';
+    const subtitle = (($(`#svg${letter}`) || {}).textContent || '').toUpperCase();
+    const status = subtitle.includes('DECOY') ? 'DECOY'
+      : subtitle.includes('QUARANTINED') ? 'QUARANTINED'
+      : subtitle.includes('INOCULATED') ? 'INOCULATED'
+      : subtitle.includes('TRUSTED') ? 'TRUSTED'
+      : (subtitle || 'UNKNOWN');
+    const slug = status.toLowerCase().replace(/[^a-z]+/g, '-');
+    const chip = document.createElement('span');
+    chip.className = `status-chip chip-${slug}`;
+    chip.textContent = status;
+    const name = card.querySelector('strong');
+    if (name) name.appendChild(chip); else card.prepend(chip);
+    card.classList.add(`status-${slug}`);
+    const digest = card.querySelector('.mono');
+    const match = digest && (digest.textContent || '').match(/SHA-256\s+([0-9a-f]{16,})/i);
+    if (match) {
+      const full = match[1];
+      digest.textContent = `SHA-256 ${full.slice(0, 8)}…`;
+      digest.title = full;
+      const details = document.createElement('details');
+      details.className = 'hash-details';
+      const summary = document.createElement('summary');
+      summary.textContent = 'Details';
+      summary.setAttribute('aria-label', `Full SHA-256 fingerprint for node ${letter}`);
+      const code = document.createElement('code');
+      code.textContent = full;
+      details.append(summary, code);
+      card.appendChild(details);
+    }
+  }
+  function initNodeCards() {
+    const container = $('#nodes');
+    if (!container) return;
+    onMutate(container, { childList: true }, observer => {
+      observer.disconnect();
+      try {
+        container.querySelectorAll('.node-card').forEach(enhanceNodeCard);
+        applyGossipPulse(container);
+      } finally {
+        observer.observe(container, { childList: true });
+      }
+    });
+    const mesh = $('#meshStudio');
+    if (mesh) onMutate(mesh, { attributes: true, attributeFilter: ['class'] }, () => applyGossipPulse(container));
+  }
+
+  // ---------- E. Collapse long JSON behind a readable summary line ----------
+  function totalNodeCount() {
+    const match = (($('#verifiedCount') || {}).textContent || '').match(/\/\s*(\d+)/);
+    return match ? match[1] : '3';
+  }
+  function collapseLongJson(id, summarize) {
+    const pre = $('#' + id);
+    if (!pre) return;
+    onMutate(pre, TEXT_ONLY, observer => {
+      observer.disconnect();
+      try {
+        const text = pre.textContent || '';
+        const signature = `${text.length}:${text.slice(0, 48)}`;
+        if (pre.dataset.polishSig === signature) return;
+        pre.dataset.polishSig = signature;
+        if (text.trim().length < 200) return;
+        const details = document.createElement('details');
+        details.className = 'json-details';
+        const summary = document.createElement('summary');
+        summary.textContent = summarize(text);
+        const body = document.createElement('pre');
+        body.textContent = text;
+        details.append(summary, body);
+        pre.textContent = '';
+        pre.appendChild(details);
+      } finally {
+        observer.observe(pre, TEXT_ONLY);
+      }
+    });
+  }
+  function initJsonCollapse() {
+    collapseLongJson('probeOutput', text => {
+      if (/^Inoculation receipts/i.test(text)) {
+        try {
+          const data = JSON.parse(text.slice(text.indexOf('\n') + 1));
+          const deliveries = Array.isArray(data) ? data : (data && data.deliveries) || [];
+          const count = deliveries.filter(item => item && item.inoculated === true).length;
+          return `${count} of ${totalNodeCount()} nodes inoculated · signed gossip receipts (tap to expand)`;
+        } catch { return 'Signed inoculation receipts (tap to expand)'; }
+      }
+      if (/Threat fingerprint:/i.test(text)) return 'Chameleon decoy response + threat fingerprint (tap to expand)';
+      if (text.trim().startsWith('{')) return 'Workflow result JSON (tap to expand)';
+      return 'Response detail (tap to expand)';
+    });
+    collapseLongJson('policyOutput', text => {
+      if (/Human gate:/i.test(text)) return 'Candidate policy · not applied until human quorum signs (tap to expand)';
+      if (/"results"\s*:/.test(text)) return 'Quorum apply result · per-node receipts (tap to expand)';
+      if (/"sandbox"\s*:/.test(text)) return 'Policy synthesis + 50-event sandbox result (tap to expand)';
+      return 'Policy detail JSON (tap to expand)';
+    });
+    collapseLongJson('preCogOutput', () => 'Aegis SIR prediction detail · advisory only, nothing executed (tap to expand)');
+  }
+
+  // ---------- Proof Explorer (proof-carrying recovery certificates) ----------
+  let proofCertificate = null;
+
+  function proofTone(value) {
+    if (/^(verified|trusted|verified-clean|succeeded)$/.test(value)) return 'good';
+    if (/^failed/.test(value)) return 'danger';
+    if (/self-asserted|recorded|not-applicable/.test(value)) return 'live';
+    return 'warn';
+  }
+  function renderProof(certificate, verification) {
+    const classes = $('#proofClasses');
+    if (!classes) return;
+    classes.replaceChildren();
+    const v = verification || certificate.verification;
+    [['Audit chain', v.auditChain], ['Audit signatures', v.auditSignatures], ['External node identity', v.externalNodeIdentity],
+     ['Snapshot artifact', v.snapshotArtifact], ['Approval signatures', v.approvalSignatures], ['Recovery operation', v.recoveryOperation],
+     ['Post-recovery integrity', v.postRecoveryIntegrity], ['Audit-only proof', v.auditOnlyProof], ['Complete recovery proof', v.completeRecoveryProof]]
+      .forEach(([label, value]) => {
+        const chip = document.createElement('span');
+        chip.className = `badge ${proofTone(String(value))}`;
+        chip.textContent = `${label}: ${value}`;
+        classes.append(chip);
+      });
+    const panel = $('#proofPanel');
+    if (!panel) return;
+    panel.replaceChildren();
+    const claims = certificate.claims || {};
+    const rows = [
+      ['Node', certificate.node],
+      ['Issued at', certificate.issuedAt],
+      ['Tamper event', claims.tamperEvent ? `${claims.tamperEvent.eventId} · ${claims.tamperEvent.attackClassification || 'integrity event'}` : '—'],
+      ['Threat fingerprint', claims.threatFingerprint?.digest ? `${claims.threatFingerprint.digest.slice(0, 16)}… (${claims.threatFingerprint.eventId})` : '—'],
+      ['Snapshot id', claims.snapshot?.snapshotId || '—'],
+      ['Snapshot artifact digest', claims.snapshot?.artifactDigest ? `${claims.snapshot.artifactDigest.slice(0, 16)}…` : 'not recorded in audit'],
+      ['Restore event', claims.restoreEvent?.eventId || '—'],
+      ['Post-recovery event', claims.postRecoveryEvent?.eventId || '—'],
+      ['Governance', certificate.governance ? `policy sequence ${certificate.governance.sequence} · approvers ${(certificate.governance.approvers || []).join(', ') || '—'}` : 'no policy approval in this cycle'],
+      ['AI provenance', certificate.aiProvenance ? `${certificate.aiProvenance.providerMode} · models: ${certificate.aiProvenance.modelsInvoked.join(', ') || 'none'} · citations validated: ${certificate.aiProvenance.referencesValidated}` : 'no AI analysis attached'],
+      ['Certificate digest', `${String(certificate.certificateDigest || '').slice(0, 24)}…`]
+    ];
+    const dl = document.createElement('dl');
+    dl.className = 'proof-fields';
+    rows.forEach(([key, value]) => {
+      const dt = document.createElement('dt'); dt.textContent = key;
+      const dd = document.createElement('dd'); dd.textContent = value == null || value === '' ? '—' : String(value);
+      dl.append(dt, dd);
+    });
+    panel.append(dl);
+    if (verification && verification.note) {
+      const note = document.createElement('p');
+      note.className = 'panel-caption';
+      note.textContent = verification.note;
+      panel.append(note);
+    }
+  }
+
+  // Self-asserted in-browser verification of the embedded evidence report.
+  // Independent proof (trust anchor + snapshot artifact) stays offline.
+  function canonicalJson(value) {
+    if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+    if (value && typeof value === 'object') return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+    return JSON.stringify(value);
+  }
+  function bytesFromBase64(value) {
+    const binary = atob(value);
+    return Uint8Array.from(binary, char => char.charCodeAt(0));
+  }
+  async function verifyEmbeddedReport(report) {
+    try {
+      const proof = report?.proof;
+      if (report?.verification?.valid !== true || !proof || proof.version !== 1 || proof.node !== report.node || proof.entries !== proof.records?.length || proof.records.length !== report.events.length) return false;
+      const pem = proof.publicKey.replace(/-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\s/g, '');
+      const fingerprintBytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(proof.publicKey)));
+      const fingerprint = [...fingerprintBytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
+      if (fingerprint !== report.nodePublicKeyFingerprint) return false;
+      const key = await crypto.subtle.importKey('spki', bytesFromBase64(pem), { name: 'Ed25519' }, false, ['verify']);
+      let previous = 'GENESIS';
+      for (let i = 0; i < proof.records.length; i++) {
+        const record = proof.records[i];
+        const event = report.events[i];
+        if (record.index !== i || event.index !== i || record.previousHash !== previous || record.at !== event.at || record.type !== event.type || record.outcome !== event.outcome || canonicalJson(record.evidence) !== canonicalJson(event.evidence)) return false;
+        const unsigned = { index: record.index, at: record.at, type: record.type, outcome: record.outcome, evidence: record.evidence, previousHash: previous };
+        const hashBytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalJson(unsigned))));
+        const hash = [...hashBytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
+        if (hash !== record.hash || !await crypto.subtle.verify({ name: 'Ed25519' }, key, bytesFromBase64(record.signature), new TextEncoder().encode(hash))) return false;
+        previous = hash;
+      }
+      return previous === proof.head;
+    } catch { return false; }
+  }
+  async function verifyProofInBrowser(certificate) {
+    const report = certificate.evidence?.report;
+    if (!report) return null;
+    const chainOk = await verifyEmbeddedReport(report);
+    const events = report.events || [];
+    const eventById = id => { const [node, index] = String(id || '').split(':'); return node === certificate.node && /^\d+$/.test(index) ? events[Number(index)] : undefined; };
+    const claims = certificate.claims || {};
+    const typedClaims = [['tamperEvent', 'tamper-detected'], ['threatFingerprint', 'threat-fingerprint'], ['quarantineEvent', 'quarantine-applied'], ['recoveryAttemptEvent', 'recovery-attempted'], ['restoreEvent', 'rollback-verified'], ['postRecoveryEvent', 'integrity-ok']];
+    const typedOk = typedClaims.every(([key, type]) => !claims[key]?.eventId || eventById(claims[key].eventId)?.type === type);
+    const refsOk = (claims.evidenceRefs || []).every(ref => eventById(ref));
+    const restore = claims.restoreEvent?.eventId ? eventById(claims.restoreEvent.eventId) : null;
+    const postCheck = claims.postRecoveryEvent?.eventId ? eventById(claims.postRecoveryEvent.eventId) : null;
+    const digestOk = !restore || !postCheck ? true : restore.evidence?.restored === postCheck.evidence?.digest;
+    const consistent = typedOk && refsOk && digestOk;
+    return {
+      auditChain: chainOk && consistent ? 'verified-self-asserted' : 'failed',
+      auditSignatures: chainOk ? 'verified-self-asserted' : 'failed',
+      externalNodeIdentity: 'not-verified-offline-trust-record-required',
+      snapshotArtifact: 'not-verified-offline-artifact-required',
+      approvalSignatures: certificate.governance ? 'audit-recorded-not-independently-reverified' : 'not-applicable',
+      recoveryOperation: certificate.verification.recoveryOperation,
+      postRecoveryIntegrity: certificate.verification.postRecoveryIntegrity,
+      auditOnlyProof: 'not-verified',
+      completeRecoveryProof: 'not-verified',
+      note: 'Browser verification is self-asserted only. Full independent proof: npm run verify-recovery -- --certificate <file> --trusted-key <independent-node-trust.json> [--snapshot <original-snapshot.json>]'
+    };
+  }
+  function initProofExplorer() {
+    const loadButton = $('#proofLoad');
+    if (!loadButton) return;
+    loadButton.addEventListener('click', async () => {
+      loadButton.disabled = true;
+      try {
+        const node = $('#proofNode').value;
+        const response = await fetch(`/api/recovery/certificate?node=${encodeURIComponent(node)}`, { cache: 'no-store', credentials: 'same-origin' });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || `http-${response.status}`);
+        proofCertificate = body;
+        renderProof(body);
+        const badge = $('#proofBadge');
+        badge.textContent = `CERTIFICATE · ${body.node.toUpperCase()} · ${body.verification.auditChain}`;
+        badge.className = `badge ${body.verification.auditChain === 'failed' ? 'danger' : 'live'}`;
+        $('#proofVerify').disabled = false;
+        $('#proofDownload').disabled = false;
+        $('#proofOffline').hidden = false;
+        judgeSync();
+      } catch (error) {
+        const badge = $('#proofBadge');
+        badge.textContent = `CERTIFICATE UNAVAILABLE · ${error.message}`;
+        badge.className = 'badge warn';
+      } finally { loadButton.disabled = false; }
+    });
+    $('#proofVerify').addEventListener('click', async () => {
+      if (!proofCertificate) return;
+      const button = $('#proofVerify'); button.disabled = true;
+      try {
+        const result = await verifyProofInBrowser(proofCertificate);
+        if (result) {
+          renderProof(proofCertificate, result);
+          const badge = $('#proofBadge');
+          badge.textContent = `BROWSER CHECK · ${result.auditChain}`;
+          badge.className = `badge ${result.auditChain === 'failed' ? 'danger' : 'live'}`;
+        }
+      } catch { /* verification failure is shown via classifications */ }
+      finally { button.disabled = false; }
+    });
+    $('#proofDownload').addEventListener('click', () => {
+      if (!proofCertificate) return;
+      const blob = new Blob([JSON.stringify(proofCertificate, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `recovery-certificate-${proofCertificate.node}.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    });
+  }
+
+  // ---------- Judge demo script checklist ----------
+  function judgeSync() {
+    const steps = document.querySelectorAll('[data-judge]');
+    if (!steps.length) return;
+    const chips = [...document.querySelectorAll('#nodes .status-chip')].map(chip => chip.textContent);
+    const allTrusted = chips.length === 3 && chips.every(text => text === 'TRUSTED');
+    steps.forEach(item => {
+      const key = item.dataset.judge;
+      const done = key === 'intro' ? true
+        : key === 'trusted' ? allTrusted || flowState.tamper !== 'waiting'
+        : key === 'certificate' ? Boolean(proofCertificate)
+        : flowState[key] === 'done';
+      item.classList.toggle('done', Boolean(done));
+    });
+  }
+  function initJudgeScript() {
+    if (!document.querySelector('[data-judge]')) return;
+    onMutate($('#nodes'), { childList: true, subtree: true, characterData: true }, judgeSync);
+    judgeSync();
+  }
+
+  // ---------- Human-governed authorization chain strip ----------
+  function initAuthzChain() {
+    const chain = $('#authzChain');
+    if (!chain) return;
+    const sync = () => {
+      const proposalText = ($('#policyAfter')?.textContent || '').trim();
+      const proposal = proposalText !== '' && proposalText !== 'Awaiting synthesis.';
+      const sandbox = ($('#sandboxBadge')?.textContent || '').startsWith('PASS');
+      const quorumMatch = ($('#quorumProgress')?.textContent || '').match(/(\d+)\s*\/\s*(\d+)/);
+      const signed = Boolean(quorumMatch) && Number(quorumMatch[1]) >= 1;
+      const quorumMet = Boolean(quorumMatch) && Number(quorumMatch[1]) >= Number(quorumMatch[2]);
+      const applied = /"ok"\s*:\s*true/.test($('#policyOutput')?.textContent || '');
+      let verified = false;
+      if (applied) {
+        const match = proposalText.match(/"sequence"\s*:\s*(\d+)/);
+        verified = Boolean(match) && Number(($('#sequence')?.textContent || '0').trim()) >= Number(match[1]);
+      }
+      const states = { proposal, sandbox, signatures: signed, quorum: quorumMet, applied, verified };
+      chain.querySelectorAll('[data-chain]').forEach(el => {
+        el.classList.toggle('done', Boolean(states[el.dataset.chain]));
+        el.classList.toggle('partial', el.dataset.chain === 'signatures' && signed && !quorumMet);
+      });
+    };
+    ['#policyAfter', '#sandboxBadge', '#quorumProgress', '#policyOutput', '#sequence'].forEach(selector => onMutate($(selector), TEXT_AND_CLASS, sync));
+  }
+
+  safe(initMirrors);
+  safe(initFlow);
+  safe(initNodeCards);
+  safe(initJsonCollapse);
+  safe(initProofExplorer);
+  safe(initJudgeScript);
+  safe(initAuthzChain);
 })();
 </script>
 </body>

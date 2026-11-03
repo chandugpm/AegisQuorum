@@ -10,3 +10,5 @@ coverage/
 .playwright-mcp/
 command-center-*.png
 cyber-wonder-*.png
+~$*
+*.docx

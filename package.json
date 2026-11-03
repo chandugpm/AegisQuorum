@@ -2,6 +2,8 @@
   "name": "aegis-quorum-security",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
+  "author": "KADAGALA RAMACHANDRUDU",
   "description": "A Bio-Mathematical Autonomous Security Platform combining Meta AI with Ed25519 Cryptography.",
   "scripts": {
     "start": "node src/launch-local.js",
@@ -9,7 +11,9 @@
     "verify-audit": "node src/verify-audit.js",
     "verify-recovery": "node src/verify-recovery.js",
     "approve-policy": "node src/approve-policy.js",
-    "demo-security": "node src/demo-security.js"
+    "demo-security": "node src/demo-security.js",
+    "red-team": "node src/red-team-cli.js",
+    "benchmark": "node scripts/benchmark.js"
   },
   "engines": { "node": ">=20" }
 }

@@ -9,7 +9,9 @@
     "verify-audit": "node src/verify-audit.js",
     "verify-recovery": "node src/verify-recovery.js",
     "approve-policy": "node src/approve-policy.js",
-    "demo-security": "node src/demo-security.js"
+    "demo-security": "node src/demo-security.js",
+    "red-team": "node src/red-team-cli.js",
+    "benchmark": "node scripts/benchmark.js"
   },
   "engines": { "node": ">=20" }
 }

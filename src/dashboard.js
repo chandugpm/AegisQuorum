@@ -7,6 +7,7 @@ const { validToken } = require('./runtime-config');
 const { RequestError, ReplayCache, requestSecurity, createMetrics, readJsonBody, createRateLimiter, clientKey } = require('./http-utils');
 const { createIncidentAnalyst } = require('./ai-analyst');
 const { createTimeline } = require('./timeline');
+const { registerExtensions, extendManifest, annotateTimeline, annotateAnalyst } = require('./extensions');
 
 function json(response, status, body, headers = {}) { response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', ...headers }); response.end(JSON.stringify(body)); }
 function equal(a, b) { return typeof a === 'string' && typeof b === 'string' && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)); }
@@ -89,9 +90,10 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         recordSecurityEvent(request, 'rejected', 'rate-limit');
         return json(response, 429, { error: 'rate-limited' });
       }
+      if (await registerExtensions({ request, response, route, url, method: request.method, json, isAdmin: equal(request.headers['x-dashboard-admin-token'], adminToken) || Boolean(developmentSessions.get(cookieValue(request, 'danms_dev_admin'))?.expiresAt > Date.now() && process.env.NODE_ENV !== 'production'), replayCache, metrics, recordSecurityEvent, statuses, auditReports, incidentAnalyst, incidentRateLimiter, staticDirectory, logger })) return;
       if (request.method === 'GET' && route === '/') { response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return response.end(fs.readFileSync(path.join(staticDirectory, 'index.html'))); }
       if (request.method === 'GET' && route === '/api/status') return json(response, 200, { nodes: await statuses() });
-      if (request.method === 'GET' && route === '/api/hackathon-manifest') return json(response, 200, {
+      if (request.method === 'GET' && route === '/api/hackathon-manifest') return json(response, 200, extendManifest({
         event: 'Meta Global AI Developer Hackathon', eventWindow: 'Oct 26 - Nov 4',
         workstreams: {
           'Pre-Existing Base MVP Scaffold': [
@@ -110,7 +112,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
           ]
         },
         implementationBoundary: 'No external backend packages; live model providers are optional and fall back deterministically.'
-      });
+      }));
       if (request.method === 'GET' && route === '/api/policy/proposal') {
         const current = await statuses(); const sequence = Math.max(...current.map(node => node.lastPolicySequence || 0)) + 1;
         return json(response, 200, { update: makePolicyUpdate(sequence, { enforcement: 'observe-only', changeWindow: 'operator-requested' }), quorum });
@@ -230,7 +232,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
       }
       if (request.method === 'GET' && route === '/api/timeline') {
         const [nodeStatuses, reports] = await Promise.all([statuses(), auditReports()]);
-        return json(response, 200, createTimeline(nodeStatuses, reports));
+        return json(response, 200, annotateTimeline(createTimeline(nodeStatuses, reports)));
       }
       if (request.method === 'GET' && route === '/metrics') return json(response, 200, metrics.snapshot());
       const getWebAuthnChallenge = request.method === 'GET' && route === '/api/webauthn/challenge';
@@ -567,7 +569,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
       if (route === '/api/incident-analysis') {
         if (!incidentRateLimiter.allow(clientKey(request))) return json(response, 429, { error: 'incident-analysis-rate-limited' });
         const [nodeStatuses, reports] = await Promise.all([statuses(), auditReports()]);
-        return json(response, 200, await incidentAnalyst.analyze({ statuses: nodeStatuses, reports }));
+        return json(response, 200, annotateAnalyst(await incidentAnalyst.analyze({ statuses: nodeStatuses, reports }), reports));
       }
       if (route === '/api/incident-response') {
         if (typeof input.node !== 'string' || !/^node-[a-c]$/.test(input.node) || !['tamper', 'scan', 'verify-snapshot', 'recover'].includes(input.action)) return json(response, 400, { error: 'invalid-incident-response' });

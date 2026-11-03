@@ -291,6 +291,185 @@
 
 <aside class="teleprompter" id="teleprompter" aria-live="polite"><strong id="directorState">DIRECTOR · STANDBY</strong><p id="subtitleText">Zero-trust posture is verified. Start a guided tour when ready.</p><div class="tour-progress" aria-label="Tour progress"><i id="tourProgress"></i></div><div class="director-controls"><label><input id="tourVoiceover" type="checkbox"> Voice</label><label><input id="tourCapture" type="checkbox"> Record screen</label><button id="tourStop" class="compact" hidden>Stop</button></div></aside>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div id="redteam-root"></div>
+<style id="redteam-panel-css">
+/* Red vs Blue panel — dark, mobile-friendly, self-contained under #redteam-root. */
+#redteam-root{--rt-bg:#0b1220;--rt-panel:#101a2c;--rt-border:rgba(6,182,212,.28);--rt-text:#dbe6f3;--rt-muted:#8aa0b8;--rt-red:#f43f5e;--rt-green:#10b981;--rt-cyan:#06b6d4;--rt-amber:#f59e0b;margin:18px 0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--rt-text)}
+#redteam-root *{box-sizing:border-box}
+#redteam-root .rt-card{background:linear-gradient(180deg,var(--rt-panel),var(--rt-bg));border:1px solid var(--rt-border);border-radius:10px;padding:16px;box-shadow:0 18px 50px rgba(0,0,0,.35)}
+#redteam-root .rt-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+#redteam-root .rt-title{margin:0;font-size:15px;letter-spacing:.04em;color:var(--rt-cyan)}
+#redteam-root .rt-sub{margin:2px 0 0;font-size:11px;color:var(--rt-muted)}
+#redteam-root .rt-run{background:linear-gradient(100deg,rgba(244,63,94,.25),rgba(6,182,212,.18));border:1px solid rgba(244,63,94,.5);color:#ffd9de;font:700 11px inherit;letter-spacing:.06em;padding:10px 16px;border-radius:6px;cursor:pointer}
+#redteam-root .rt-run:disabled{opacity:.5;cursor:wait}
+#redteam-root .rt-score{display:flex;gap:14px;flex-wrap:wrap;margin:12px 0}
+#redteam-root .rt-score div{background:rgba(5,10,17,.6);border:1px solid var(--rt-border);border-radius:6px;padding:8px 12px;font-size:11px}
+#redteam-root .rt-score b{display:block;font-size:18px;margin-top:2px}
+#redteam-root .rt-green{color:var(--rt-green)}#redteam-root .rt-red{color:var(--rt-red)}#redteam-root .rt-amber{color:var(--rt-amber)}
+#redteam-root .rt-timeline{display:flex;align-items:center;gap:0;flex-wrap:wrap;margin:14px 0}
+#redteam-root .rt-step{flex:1;min-width:96px;text-align:center;position:relative;padding:10px 6px;font-size:10px;color:var(--rt-muted)}
+#redteam-root .rt-step::before{content:'';display:block;width:14px;height:14px;margin:0 auto 6px;border-radius:50%;border:2px solid var(--rt-muted);background:var(--rt-bg);transition:.3s}
+#redteam-root .rt-step::after{content:'';position:absolute;top:16px;left:-50%;width:100%;height:2px;background:var(--rt-border);z-index:-1}
+#redteam-root .rt-step:first-child::after{display:none}
+#redteam-root .rt-step.done{color:var(--rt-text)}
+#redteam-root .rt-step.done::before{border-color:var(--rt-green);background:var(--rt-green);box-shadow:0 0 12px rgba(16,185,129,.6)}
+#redteam-root .rt-step.active{color:var(--rt-amber)}
+#redteam-root .rt-step.active::before{border-color:var(--rt-amber);background:var(--rt-amber);animation:rt-pulse 1s ease-in-out infinite}
+@keyframes rt-pulse{50%{transform:scale(1.35);opacity:.6}}
+#redteam-root table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}
+#redteam-root th,#redteam-root td{text-align:left;padding:8px 10px;border-bottom:1px solid rgba(137,151,170,.14)}
+#redteam-root th{color:var(--rt-cyan);text-transform:uppercase;font-size:9px;letter-spacing:.08em}
+#redteam-root .rt-blocked{color:var(--rt-green);font-weight:700}
+#redteam-root .rt-passed{color:var(--rt-red);font-weight:700}
+#redteam-root .rt-ids{color:var(--rt-muted);font-size:9px;word-break:break-all}
+#redteam-root .rt-status{margin-top:10px;font-size:11px;color:var(--rt-muted);min-height:14px}
+#redteam-root .rt-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#redteam-root .rt-token{background:rgba(5,10,17,.7);border:1px solid var(--rt-border);border-radius:6px;color:var(--rt-text);font:10px inherit;padding:9px 10px;width:min(240px,60vw)}
+#redteam-root .rt-bench{margin-top:14px}
+#redteam-root .rt-refresh{border-color:rgba(6,182,212,.5);color:#a5f3fc;background:rgba(6,182,212,.12)}
+#redteam-root code{color:var(--rt-amber);font-size:10px}
+@media(max-width:640px){#redteam-root .rt-step{min-width:70px;font-size:9px}#redteam-root th:nth-child(5),#redteam-root td:nth-child(5){display:none}}
+</style>
+<script id="redteam-panel-js">
+// Red vs Blue panel. Renders itself into #redteam-root. Self-contained; it
+// reuses the dashboard's in-memory admin token via the global API helper when
+// available, and never touches existing markup or scripts.
+(() => {
+  'use strict';
+  const root = document.getElementById('redteam-root');
+  if (!root) return;
+
+  const STAGES = ['detect', 'quarantine', 'decoy', 'gossip', 'recover'];
+
+  root.innerHTML = `
+    <div class="rt-card">
+      <div class="rt-head">
+        <div>
+          <h2 class="rt-title">⚔ Red vs Blue</h2>
+          <p class="rt-sub">Five simulated attacks against isolated temporary nodes. Nothing touches live state.</p>
+        </div>
+        <div class="rt-controls">
+          <input class="rt-token" id="rtToken" type="password" autocomplete="off" placeholder="Admin token (or use dev session)">
+          <button class="rt-run" id="rtRun">▶ Run Red Team</button>
+        </div>
+      </div>
+      <div class="rt-timeline" id="rtTimeline">
+        ${STAGES.map(stage => `<div class="rt-step" data-stage="${stage}">${stage}</div>`).join('')}
+      </div>
+      <div class="rt-score" id="rtScore" hidden>
+        <div>Attempted<b class="rt-amber" id="rtAttempted">0</b></div>
+        <div>Blocked<b class="rt-green" id="rtBlocked">0</b></div>
+        <div>Succeeded<b class="rt-red" id="rtSucceeded">0</b></div>
+      </div>
+      <table id="rtTable" hidden>
+        <thead><tr><th>Attack</th><th>Result</th><th>Detect (ms)</th><th>Defense layer</th><th>Audit events</th></tr></thead>
+        <tbody id="rtBody"></tbody>
+      </table>
+      <div class="rt-status" id="rtStatus">Idle. Run the red team to test the blue team's defenses.</div>
+    </div>
+    <div class="rt-card rt-bench">
+      <div class="rt-head">
+        <div>
+          <h2 class="rt-title">⏱ Benchmarks</h2>
+          <p class="rt-sub">Latest <code>npm run benchmark</code> results served from benchmark-results.json.</p>
+        </div>
+        <button class="rt-run rt-refresh" id="rtBenchRefresh">↻ Refresh</button>
+      </div>
+      <table id="rtBenchTable" hidden>
+        <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+        <tbody id="rtBenchBody"></tbody>
+      </table>
+      <div class="rt-status" id="rtBenchStatus">Loading…</div>
+    </div>`;
+
+  const $ = selector => root.querySelector(selector);
+  const status = text => { $('#rtStatus').textContent = text; };
+
+  function setStage(active) {
+    const index = STAGES.indexOf(active);
+    root.querySelectorAll('.rt-step').forEach((el, i) => {
+      el.classList.toggle('done', index === -1 ? false : i < index);
+      el.classList.toggle('active', i === index);
+    });
+    if (index === -1) root.querySelectorAll('.rt-step').forEach(el => el.classList.remove('done', 'active'));
+  }
+
+  function completeAll() {
+    root.querySelectorAll('.rt-step').forEach(el => { el.classList.add('done'); el.classList.remove('active'); });
+  }
+
+  function render(result) {
+    $('#rtScore').hidden = false;
+    $('#rtAttempted').textContent = result.scoreboard.attempted;
+    $('#rtBlocked').textContent = result.scoreboard.blocked;
+    $('#rtSucceeded').textContent = result.scoreboard.succeeded;
+    $('#rtTable').hidden = false;
+    $('#rtBody').innerHTML = result.attacks.map(attack => `
+      <tr>
+        <td>${attack.name}</td>
+        <td class="${attack.blocked ? 'rt-blocked' : 'rt-passed'}">${attack.blocked ? 'BLOCKED' : 'PASSED'}</td>
+        <td>${attack.detectedAtMs}</td>
+        <td>${attack.defenseLayer}</td>
+        <td class="rt-ids">${(attack.auditEventIds || []).join(', ') || '—'}</td>
+      </tr>`).join('');
+  }
+
+  async function run() {
+    const button = $('#rtRun');
+    button.disabled = true;
+    setStage('detect');
+    status('Running attacks against isolated temporary nodes…');
+    const stageTimer = [setTimeout(() => setStage('quarantine'), 400), setTimeout(() => setStage('decoy'), 800),
+      setTimeout(() => setStage('gossip'), 1200), setTimeout(() => setStage('recover'), 1600)];
+    try {
+      const headers = { 'content-type': 'application/json', 'x-request-id': `redteam-${crypto.randomUUID()}`, 'x-request-timestamp': String(Date.now()) };
+      const token = $('#rtToken').value.trim();
+      if (token) headers['x-dashboard-admin-token'] = token;
+      const response = await fetch('/api/red-team/run', { method: 'POST', headers, body: '{}' });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || `http-${response.status}`);
+      completeAll();
+      render(body);
+      status(`Complete. ${body.scoreboard.blocked}/${body.scoreboard.attempted} attacks blocked by the blue team.`);
+    } catch (error) {
+      setStage(null);
+      status(`Red team run failed: ${error.message}. Unlock the admin role first.`);
+    } finally {
+      stageTimer.forEach(clearTimeout);
+      button.disabled = false;
+    }
+  }
+
+  async function loadBenchmarks() {
+    const statusEl = $('#rtBenchStatus');
+    statusEl.textContent = 'Loading…';
+    try {
+      const response = await fetch('/api/benchmarks');
+      if (response.status === 404) { statusEl.textContent = 'No benchmark results yet. Run `npm run benchmark` to generate them.'; return; }
+      if (!response.ok) throw new Error(`http-${response.status}`);
+      const body = await response.json();
+      const m = body.metrics || {};
+      const rows = [
+        ['MTTD (tamper → detect)', `${m.mttdMs} ms`],
+        ['MTTR (quarantine → verified recovery)', `${m.mttrMs} ms`],
+        ['Approval verification (2-of-3)', `${m.approvalVerificationMs} ms`],
+        ['Audit-chain verification (100 events)', `${m.auditChainVerificationMs?.events100} ms`],
+        ['Audit-chain verification (1000 events)', `${m.auditChainVerificationMs?.events1000} ms`],
+        [`False positives over ${m.falsePositivesOverCleanScans?.cleanScans ?? 50} clean scans`, String(m.falsePositivesOverCleanScans?.falsePositives ?? '—')]
+      ];
+      $('#rtBenchBody').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+      $('#rtBenchTable').hidden = false;
+      statusEl.textContent = `Generated ${body.generatedAt || 'unknown'} · isolated temporary state only.`;
+    } catch (error) {
+      statusEl.textContent = `Benchmarks unavailable: ${error.message}`;
+    }
+  }
+
+  $('#rtRun').addEventListener('click', run);
+  $('#rtBenchRefresh').addEventListener('click', loadBenchmarks);
+  loadBenchmarks();
+})();
+</script>
 <script>
 (() => {
   'use strict';

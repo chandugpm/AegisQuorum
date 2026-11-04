@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-11-03T06:15:05.035Z",
+  "generatedAt": "2026-11-04T08:18:22.608Z",
   "isolatedDirectory": "temporary (removed at completion)",
   "metrics": {
-    "mttdMs": 15,
-    "mttrMs": 10,
-    "approvalVerificationMs": 3,
+    "mttdMs": 16,
+    "mttrMs": 9,
+    "approvalVerificationMs": 4,
     "auditChainVerificationMs": {
       "events100": 13,
-      "events1000": 265
+      "events1000": 114
     },
     "falsePositivesOverCleanScans": {
       "falsePositives": 0,
@@ -20,7 +20,7 @@
       "expected": "recovery-rejected",
       "actual": "recovery-rejected",
       "pass": true,
-      "durationMs": 409,
+      "durationMs": 145,
       "evidenceRef": "node-not-quarantined"
     },
     {
@@ -28,7 +28,7 @@
       "expected": "clean",
       "actual": "clean",
       "pass": true,
-      "durationMs": 15,
+      "durationMs": 6,
       "evidenceRef": "node-a:1050"
     },
     {
@@ -36,7 +36,7 @@
       "expected": "quarantined",
       "actual": "quarantined",
       "pass": true,
-      "durationMs": 87,
+      "durationMs": 27,
       "evidenceRef": "node-a:1055"
     },
     {
@@ -44,7 +44,7 @@
       "expected": "idempotent-rejection",
       "actual": "idempotent-rejection",
       "pass": true,
-      "durationMs": 887,
+      "durationMs": 275,
       "evidenceRef": "node-not-quarantined"
     },
     {
@@ -52,7 +52,7 @@
       "expected": "unauthorized",
       "actual": "unauthorized",
       "pass": true,
-      "durationMs": 1,
+      "durationMs": 0,
       "evidenceRef": "administrator-or-operator-token-required"
     },
     {
@@ -60,7 +60,7 @@
       "expected": "quorum-rejected",
       "actual": "quorum-rejected",
       "pass": true,
-      "durationMs": 404,
+      "durationMs": 121,
       "evidenceRef": "policy-needs-two-valid-distinct-approvals"
     },
     {
@@ -68,7 +68,7 @@
       "expected": "replay-rejected",
       "actual": "replay-rejected",
       "pass": true,
-      "durationMs": 53,
+      "durationMs": 12,
       "evidenceRef": "replayed-request"
     },
     {
@@ -76,7 +76,7 @@
       "expected": "signature-invalid",
       "actual": "signature-invalid",
       "pass": true,
-      "durationMs": 1,
+      "durationMs": 0,
       "evidenceRef": null
     },
     {
@@ -84,7 +84,7 @@
       "expected": "artifact-rejected",
       "actual": "artifact-rejected",
       "pass": true,
-      "durationMs": 408,
+      "durationMs": 109,
       "evidenceRef": "snapshot-artifact-digest-mismatch"
     },
     {
@@ -92,7 +92,7 @@
       "expected": "recovery-failed-safe",
       "actual": "recovery-failed-safe",
       "pass": true,
-      "durationMs": 150,
+      "durationMs": 44,
       "evidenceRef": "node-a:1070"
     }
   ]

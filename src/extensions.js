@@ -92,7 +92,11 @@ function extendManifest(manifest) {
     ...(workstreams[key] || []),
     'Red Team vs Blue Team attack simulator with a live defense timeline and scoreboard',
     'Performance benchmark harness (MTTD, MTTR, approval and audit-chain verification, false positives)',
-    'MITRE ATT&CK technique tagging and a read-only STIX 2.1-style threat-intel export'
+    'MITRE ATT&CK technique tagging and a read-only STIX 2.1-style threat-intel export',
+    'Proof-carrying recovery certificates with a portable JSON bundle, dashboard Proof Explorer, and offline CLI certificate verification',
+    'Prompt-injection firewall with dual-model adversarial co-evolution (Baseten open-weights prediction + Meta Spark counter-antibody) and SHA-256 AI provenance proofs',
+    'SAM 3.1 multiplexed 16-object edge-rack forensics scan correlated with signed quarantine evidence',
+    'Rate-limit reliability hardening: shielded-node control-plane observability, control-plane read caching, and single-flight incident serialization'
   ];
   return { ...manifest, workstreams };
 }

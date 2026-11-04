@@ -52,7 +52,13 @@ async function registerExtensions(context) {
       // AI provenance from the latest visual/voice forensic correlation, when
       // one exists. The certificate never claims analysis that did not run.
       const aiProvenance = (context.visualForensicsLedger || []).at(-1) || null;
-      json(response, 200, buildRecoveryCertificate(report, { aiProvenance }));
+      if (!report.proof || !Array.isArray(report.events)) { json(response, 409, { error: 'node-report-incomplete' }); return true; }
+      try {
+        json(response, 200, buildRecoveryCertificate(report, { aiProvenance }));
+      } catch (error) {
+        if (error?.message === 'sanitized-node-report-required') { json(response, 409, { error: 'node-report-incomplete' }); return true; }
+        throw error;
+      }
       return true;
     }
 

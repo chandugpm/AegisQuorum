@@ -187,3 +187,97 @@ test('GET /api/recovery/certificate issues a sanitized portable certificate afte
   const wrongMethod = await requestJson(`${base}/api/recovery/certificate?node=node-a`, { method: 'POST', headers: admin, body: {} });
   assert.equal(wrongMethod.status, 405);
 });
+
+test('GET /api/recovery/verify returns trust-anchored full proof when provisioned, and degrades honestly', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aegis-recovery-verify-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const authorities = createAuthorities(path.join(root, 'authorities'));
+  const trust = path.join(root, 'trust.json'); writeJsonAtomic(trust, authorityTrust(authorities));
+  const nodes = ['node-a', 'node-b', 'node-c'].map(name => startNode({ directory: path.join(root, name), name, authorityFile: trust, port: 0, serviceToken }));
+  await Promise.all(nodes.map(node => waitFor(node.server))); t.after(async () => { await Promise.all(nodes.map(node => close(node.server))); });
+  const urls = nodes.map(node => `http://127.0.0.1:${node.server.address().port}`);
+  const dashboard = startDashboard({ port: 0, authorityDirectory: path.join(root, 'authorities'), authorityTrustFile: trust, nodeUrls: urls, serviceToken, adminToken });
+  await waitFor(dashboard); t.after(() => close(dashboard));
+  const base = `http://127.0.0.1:${dashboard.address().port}`;
+  const admin = { 'x-dashboard-admin-token': adminToken };
+  const post = (route, body = {}) => requestJson(`${base}${route}`, { method: 'POST', headers: admin, body });
+
+  assert.equal((await post('/api/incident-response', { node: 'node-a', action: 'tamper' })).status, 200);
+  assert.equal((await post('/api/incident-response', { node: 'node-a', action: 'scan' })).body.quarantined, true);
+  assert.equal((await post('/api/incident-response', { node: 'node-a', action: 'recover' })).body.operationStatus, 'verified');
+
+  // Without a provisioned trust record the proof degrades honestly.
+  const unprovisioned = await requestJson(`${base}/api/recovery/verify?node=node-a`);
+  assert.equal(unprovisioned.status, 200);
+  assert.equal(unprovisioned.body.proofInputs.trustRecord, 'not-provisioned');
+  assert.equal(unprovisioned.body.verification.externalNodeIdentity, 'not-verified-trust-record-not-provisioned');
+  assert.equal(unprovisioned.body.verification.completeRecoveryProof, 'not-verified');
+
+  // Provision the independent danms-node-trust-v1 record (launch-local layout).
+  const publicKey = nodes[0].node.identity.publicKey;
+  const pem = `${publicKey.trim().replace(/\r\n/g, '\n')}\n`;
+  fs.mkdirSync(path.join(root, 'node-trust'), { recursive: true });
+  writeJsonAtomic(path.join(root, 'node-trust', 'node-a-trust.json'), {
+    format: 'danms-node-trust-v1', node: 'node-a', algorithm: 'Ed25519',
+    fingerprint: sha256(pem), publicKey: pem
+  });
+
+  const response = await requestJson(`${base}/api/recovery/verify?node=node-a`);
+  assert.equal(response.status, 200);
+  assert.equal(response.body.node, 'node-a');
+  assert.equal(response.body.consistent, true);
+  assert.equal(response.body.proofInputs.trustRecord, 'provisioned-danms-node-trust-v1');
+  assert.equal(response.body.verification.externalNodeIdentity, 'trusted');
+  assert.equal(response.body.verification.auditChain, 'verified');
+  assert.equal(response.body.verification.snapshotArtifact, 'verified');
+  assert.equal(response.body.verification.recoveryOperation, 'succeeded');
+  assert.equal(response.body.verification.postRecoveryIntegrity, 'verified-clean');
+  assert.equal(response.body.verification.completeRecoveryProof, 'verified');
+  const raw = JSON.stringify(response.body);
+  assert.equal(raw.includes('privateKey'), false);
+  const missing = await requestJson(`${base}/api/recovery/verify?node=node-z`);
+  assert.equal(missing.status, 404);
+
+  // Quorum consistency: the proposal endpoint reports the two REAL offline
+  // authority approvals (validated by validatePolicyApprovals, never applied)
+  // with distinct authority IDs and signature fingerprints.
+  const proposal = await requestJson(`${base}/api/policy/proposal`);
+  assert.equal(proposal.status, 200);
+  assert.equal(proposal.body.demoApprovals.verified, true);
+  assert.deepEqual(proposal.body.demoApprovals.authorities, ['authority-1', 'authority-2']);
+  assert.equal(proposal.body.demoApprovals.applied, false);
+  assert.equal(proposal.body.demoApprovals.entries.length, 2);
+  assert.match(proposal.body.demoApprovals.entries[0].signatureFingerprint, /^[a-f0-9]{16}$/);
+  assert.notEqual(proposal.body.demoApprovals.entries[0].signatureFingerprint, proposal.body.demoApprovals.entries[1].signatureFingerprint);
+});
+
+test('recovery routes degrade honestly when a persisted node audit chain is invalid', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aegis-degraded-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const authorities = createAuthorities(path.join(root, 'authorities'));
+  const trust = path.join(root, 'trust.json'); writeJsonAtomic(trust, authorityTrust(authorities));
+  let node = startNode({ directory: path.join(root, 'node-a'), name: 'node-a', authorityFile: trust, port: 0, serviceToken });
+  await waitFor(node.server); await close(node.server);
+  // Corrupt one persisted hash link so the chain cannot verify on next boot.
+  const auditFile = path.join(root, 'node-a', 'audit.json');
+  const text = fs.readFileSync(auditFile, 'utf8');
+  const match = text.match(/[a-f0-9]{64}/);
+  assert.ok(match, 'expected a persisted hash to corrupt');
+  const flipped = match[0].startsWith('0') ? `1${match[0].slice(1)}` : `0${match[0].slice(1)}`;
+  fs.writeFileSync(auditFile, text.replace(match[0], flipped));
+  node = startNode({ directory: path.join(root, 'node-a'), name: 'node-a', authorityFile: trust, port: 0, serviceToken });
+  await waitFor(node.server); t.after(async () => close(node.server));
+  const dashboard = startDashboard({ port: 0, authorityDirectory: path.join(root, 'authorities'), authorityTrustFile: trust, nodeUrls: [`http://127.0.0.1:${node.server.address().port}`], serviceToken, adminToken });
+  await waitFor(dashboard); t.after(() => close(dashboard));
+  const base = `http://127.0.0.1:${dashboard.address().port}`;
+
+  const certificate = await requestJson(`${base}/api/recovery/certificate?node=node-a`);
+  assert.equal(certificate.status, 409);
+  assert.equal(certificate.body.error, 'node-report-incomplete');
+
+  const verify = await requestJson(`${base}/api/recovery/verify?node=node-a`);
+  assert.equal(verify.status, 200);
+  assert.equal(verify.body.consistent, false);
+  assert.equal(verify.body.verification.auditChain, 'not-verified');
+  assert.equal(verify.body.verification.completeRecoveryProof, 'not-verified');
+});

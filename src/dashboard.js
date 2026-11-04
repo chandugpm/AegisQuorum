@@ -2,10 +2,11 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { makePolicyUpdate, parseWebAuthnRegistration, policyDigest, readJson, sha256, stable, validatePolicyApprovals, verifySanitizedAuditEvidence, verify, verifyWebAuthnAssertion, writeJsonAtomic } = require('./core');
+const { approvePolicy, makePolicyUpdate, parseWebAuthnRegistration, policyDigest, readJson, sha256, stable, validatePolicyApprovals, verifySanitizedAuditEvidence, verify, verifyWebAuthnAssertion, writeJsonAtomic } = require('./core');
 const { validToken } = require('./runtime-config');
 const { RequestError, ReplayCache, requestSecurity, createMetrics, readJsonBody, createRateLimiter, clientKey } = require('./http-utils');
 const { createIncidentAnalyst } = require('./ai-analyst');
+const { buildRecoveryCertificate, verifyRecoveryCertificate } = require('./recovery-certificate');
 const { createTimeline } = require('./timeline');
 const { registerExtensions, extendManifest, annotateTimeline, annotateAnalyst } = require('./extensions');
 
@@ -161,7 +162,89 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
       }));
       if (request.method === 'GET' && route === '/api/policy/proposal') {
         const current = await statuses(); const sequence = Math.max(...current.map(node => node.lastPolicySequence || 0)) + 1;
-        return json(response, 200, { update: makePolicyUpdate(sequence, { enforcement: 'observe-only', changeWindow: 'operator-requested' }), quorum });
+        const update = makePolicyUpdate(sequence, { enforcement: 'observe-only', changeWindow: 'operator-requested' });
+        const body = { update, quorum };
+        // Local-demo quorum aid (never in production): the proposal is signed by
+        // this machine's offline authority identities — the same real Ed25519
+        // path as `npm run approve-policy` — and REALLY verified through
+        // validatePolicyApprovals. Nothing is applied; biometric passkey
+        // signing stays a separate, human-only path.
+        if (process.env.NODE_ENV !== 'production' && authorityDirectory) {
+          try {
+            const identities = ['authority-1', 'authority-2']
+              .map(name => readJson(path.join(authorityDirectory, name, 'identity.json'), null))
+              .filter(identity => identity && typeof identity.privateKey === 'string');
+            const approvals = identities.slice(0, quorum).map(identity => approvePolicy(update, identity));
+            validatePolicyApprovals(update, approvals, trustedAuthorities, quorum, sequence - 1, webauthnAuthorities);
+            body.demoApprovals = {
+              authorities: approvals.map(approval => approval.authority),
+              entries: approvals.map(approval => ({ authority: approval.authority, digestPrefix: String(approval.digest || '').slice(0, 16), signatureFingerprint: sha256(String(approval.signature || '')).slice(0, 16) })),
+              verified: approvals.length >= quorum, quorum, mode: 'offline-authority-local-demo', applied: false
+            };
+          } catch { body.demoApprovals = { verified: false, quorum, mode: 'offline-authority-local-demo', applied: false }; }
+        }
+        return json(response, 200, body);
+      }
+      if (request.method === 'GET' && route === '/api/recovery/verify') {
+        const requested = url.searchParams.get('node');
+        const reports = await auditReportsCached();
+        const report = requested ? reports.find(item => item.node === requested) : (reports.length === 1 ? reports[0] : null);
+        if (!report) return json(response, 404, { error: 'node-report-not-found' });
+        let certificate;
+        const incompleteNote = 'No proof constructed: the node audit report is incomplete (chain invalid or signed proof unavailable). Nothing is claimed as verified.';
+        const incompleteBody = () => ({
+          node: report.node || requested || 'unknown',
+          consistent: false,
+          verification: {
+            mode: 'audit-only', auditChain: 'not-verified', auditSignatures: 'not-verified',
+            externalNodeIdentity: 'not-verified', snapshotArtifact: 'not-verified',
+            approvalSignatures: 'not-verified', recoveryOperation: 'not-verified',
+            postRecoveryIntegrity: 'not-verified', auditOnlyProof: 'not-verified',
+            completeRecoveryProof: 'not-verified'
+          },
+          proofInputs: { trustRecord: 'not-evaluated', snapshotArtifact: 'not-evaluated', auditChain: 'node-report-incomplete', postRecoveryIntegrity: 'not-evaluated' },
+          note: incompleteNote
+        });
+        if (!report.proof || !Array.isArray(report.events)) return json(response, 200, incompleteBody());
+        try {
+          certificate = buildRecoveryCertificate(report, { aiProvenance: visualForensicsLedger.at(-1) || null });
+        } catch (error) {
+          if (error?.message === 'sanitized-node-report-required') return json(response, 200, incompleteBody());
+          throw error;
+        }
+        const runtimeRoot = authorityDirectory ? path.dirname(authorityDirectory) : null;
+        const trustRecord = runtimeRoot ? readJson(path.join(runtimeRoot, 'node-trust', `${report.node}-trust.json`), null) : null;
+        let trustedPublicKey;
+        let trustInput = 'not-provisioned';
+        if (trustRecord && trustRecord.format === 'danms-node-trust-v1' && trustRecord.node === report.node && typeof trustRecord.publicKey === 'string') {
+          const pem = `${trustRecord.publicKey.trim().replace(/\r\n/g, '\n')}\n`;
+          if (sha256(pem) === trustRecord.fingerprint) { trustedPublicKey = pem; trustInput = 'provisioned-danms-node-trust-v1'; }
+          else trustInput = 'provisioned-but-fingerprint-mismatch';
+        }
+        const snapshotId = certificate.claims?.snapshot?.snapshotId || null;
+        let snapshotBytes;
+        let snapshotArtifactError;
+        if (snapshotId && runtimeRoot && /^[A-Za-z0-9_-]+$/.test(snapshotId)) {
+          const snapshotDirs = [path.join(runtimeRoot, 'nodes', report.node, 'snapshots'), path.join(runtimeRoot, report.node, 'snapshots')];
+          for (const dir of snapshotDirs) { try { snapshotBytes = fs.readFileSync(path.join(dir, `${snapshotId}.json`)); break; } catch { /* try the next node-directory layout */ } }
+          if (!snapshotBytes) snapshotArtifactError = 'snapshot-artifact-missing-or-unreadable';
+        }
+        const result = verifyRecoveryCertificate(certificate, { trustedPublicKey, snapshotBytes });
+        const verification = { ...result.verification };
+        if (!trustedPublicKey) verification.externalNodeIdentity = trustInput === 'provisioned-but-fingerprint-mismatch' ? 'not-verified-trust-record-fingerprint-mismatch' : 'not-verified-trust-record-not-provisioned';
+        if (snapshotArtifactError) { verification.snapshotArtifact = `failed-${snapshotArtifactError}`; verification.completeRecoveryProof = 'not-verified'; }
+        return json(response, 200, {
+          node: report.node,
+          consistent: result.consistent,
+          verification,
+          proofInputs: {
+            trustRecord: trustInput,
+            snapshotArtifact: snapshotBytes ? `snapshot-${snapshotId}-sha256-ed25519-checked` : (snapshotId ? (snapshotArtifactError || 'unavailable') : 'no-snapshot-in-recovery-cycle'),
+            auditChain: 'embedded-signed-evidence-report',
+            postRecoveryIntegrity: verification.postRecoveryIntegrity
+          },
+          note: 'Server-side full proof: independent danms-node-trust-v1 anchor (launch-local trust-on-first-use), original snapshot artifact bytes, Ed25519 audit chain, and post-recovery integrity scan. Offline cross-check: npm run verify-recovery -- --certificate <file> --trusted-key <trust-file> --snapshot <snapshot-file>.'
+        });
       }
       if (request.method === 'GET' && route === '/api/audit') {
         const [reports, nodeStatuses] = await Promise.all([auditReportsCached(), statusesCached()]);
@@ -785,5 +868,5 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
   });
   server.listen(port, host, () => console.log(`Dashboard listening at http://${host}:${server.address().port}`)); return server;
 }
-if (require.main === module) startDashboard({ port: Number(process.env.PORT || 7000), host: process.env.HOST || '127.0.0.1', nodeUrls: (process.env.NODE_URLS || '').split(',').filter(Boolean), authorityDirectory: process.env.AUTHORITY_DIRECTORY, authorityTrustFile: process.env.AUTHORITY_TRUST_FILE, serviceToken: process.env.NODE_SERVICE_TOKEN, adminToken: process.env.DASHBOARD_ADMIN_TOKEN, operatorToken: process.env.DASHBOARD_OPERATOR_TOKEN });
+if (require.main === module) { require('./runtime-config').loadEnvironmentFile(); startDashboard({ port: Number(process.env.PORT || 7000), host: process.env.HOST || '127.0.0.1', nodeUrls: (process.env.NODE_URLS || '').split(',').filter(Boolean), authorityDirectory: process.env.AUTHORITY_DIRECTORY, authorityTrustFile: process.env.AUTHORITY_TRUST_FILE, serviceToken: process.env.NODE_SERVICE_TOKEN, adminToken: process.env.DASHBOARD_ADMIN_TOKEN, operatorToken: process.env.DASHBOARD_OPERATOR_TOKEN }); }
 module.exports = { startDashboard, requestJson, sanitizeNodeStatus };

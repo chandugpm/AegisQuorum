@@ -335,8 +335,8 @@ summary{cursor:pointer}
 .director-progress{width:130px;height:4px;background:#253246;border-radius:99px;overflow:hidden;flex:none}
 .director-progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--green));transition:width .25s linear}
 .director-hud button{padding:5px 10px;font-size:9px;white-space:nowrap}
-.director-subtitle{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;align-items:center;gap:12px;max-width:min(1040px,calc(100vw - 20px));max-height:26vh;overflow:hidden;padding:11px 18px;border:1px solid rgba(6,182,212,.3);border-radius:12px;background:rgba(5,9,16,.93);backdrop-filter:blur(14px);box-shadow:0 16px 48px rgba(0,0,0,.45)}
-.director-subtitle p{margin:0;color:#eef4fb;font-size:24px;font-weight:600;line-height:1.4;text-align:center;text-shadow:0 2px 4px rgba(0,0,0,.9),0 0 14px rgba(0,0,0,.65);max-height:calc(26vh - 22px);overflow:auto}
+.director-subtitle{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;align-items:center;gap:12px;max-width:min(1040px,calc(100vw - 20px));max-height:26vh;overflow:hidden;padding:11px 18px;border:1px solid rgba(0,242,255,.35);border-radius:12px;background:rgba(2,6,12,.96);backdrop-filter:blur(14px);box-shadow:0 16px 48px rgba(0,0,0,.55)}
+.director-subtitle p{margin:0;color:#ffffff;font-size:24px;font-weight:600;line-height:1.4;text-align:center;text-shadow:0 2px 4px rgba(0,0,0,.95),0 0 14px rgba(0,0,0,.8);max-height:calc(26vh - 22px);overflow:auto}
 .director-prov{flex:none;max-width:230px;padding:4px 11px;border:1px solid rgba(139,92,246,.6);border-radius:99px;color:#e9d5ff;background:rgba(139,92,246,.12);font:700 8px var(--mono);letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 0 18px rgba(139,92,246,.3);animation:prov-glow 2.4s ease-in-out infinite}
 @keyframes prov-glow{0%,100%{box-shadow:0 0 10px rgba(139,92,246,.2)}50%{box-shadow:0 0 24px rgba(139,92,246,.45)}}
 @media(max-width:700px){.director-prov{display:none}}
@@ -348,7 +348,7 @@ summary{cursor:pointer}
 .audio-wave i:nth-child(4){height:65%;animation-delay:.45s}
 .audio-wave i:nth-child(5){height:40%;animation-delay:.6s}
 @keyframes wave{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
-.director-spotlight{position:relative!important;border:3px solid #00f2ff!important;box-shadow:0 0 20px rgba(0,242,255,.4),0 0 0 1px rgba(0,242,255,.3)!important;transform:scale(1.008);z-index:2}
+.director-spotlight{position:relative!important;border:3px solid #00f2ff!important;box-shadow:0 0 40px rgba(0,242,255,.3),0 0 0 1px rgba(0,242,255,.35)!important;transform:scale(1.008);z-index:2}
 .director-spotlight::before{content:"● LIVE EXECUTING";position:absolute;top:8px;right:10px;color:var(--green);font:700 8px var(--mono);letter-spacing:.1em;animation:rec-blink 1.2s steps(2) infinite;pointer-events:none}
 details.director-spotlight::before{top:auto;bottom:8px}
 @media(max-width:640px){.director-hud{flex-wrap:wrap;justify-content:center;border-radius:14px;max-width:calc(100vw - 16px)}.director-progress{width:100%;order:5}.director-act{max-width:100%}}
@@ -1509,10 +1509,15 @@ details.director-spotlight::before{top:auto;bottom:8px}
     if (stepInFlight) { statusMessage('A stage is already running; wait for it to finish before starting another.'); return; }
     stepInFlight = true;
     document.querySelectorAll('[data-step]').forEach(button => { button.disabled = true; });
+    let failed = false;
     try { return await runStep(step, options); }
+    catch (error) { failed = true; throw error; }
     finally {
       stepInFlight = false;
       document.querySelectorAll('[data-step]').forEach(button => { button.disabled = false; });
+      // A failed stage never shows 'running' or 'done' afterwards: the flow
+      // observer re-derives 'waiting' once 'active' is removed.
+      if (failed) document.querySelector(`[data-step="${step}"]`)?.classList.remove('active');
     }
   }
   async function synthesize() {
@@ -2357,13 +2362,19 @@ details.director-spotlight::before{top:auto;bottom:8px}
         focusCard(act.focus());                 // smooth-scroll to center + spotlight glow
         await waitDirector(1000);               // let the scroll settle on camera
         if (directorStop) break;
-        await showcaseCueSync(act.narration);   // voice first: pause until the sentence fully ends
-        if (directorStop) break;                // Stop during narration never launches the action
+        // Voice and the real action run concurrently (strict await on BOTH
+        // before the live cue: no inter-act overlap, no fake 'done' states —
+        // stages flip to done only when the genuine call completes).
         let liveResult;
-        if (act.action) {
+        const narrationDone = showcaseCueSync(act.narration);
+        const actionDone = (async () => {
+          if (!act.action) return;
           try { liveResult = await act.action(); }
           catch (error) { statusMessage(`${act.title}: ${error.message}`); }
-        }
+        })();
+        await narrationDone;
+        if (directorStop) break;                // Stop: no new act starts; an in-flight real op finishes honestly
+        await actionDone;
         if (directorStop) break;
         if (act.prov) setDirectorProv(directorProvFromResult(act.prov, liveResult));
         if (typeof act.live === 'function') {

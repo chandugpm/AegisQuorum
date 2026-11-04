@@ -2180,11 +2180,11 @@ details.director-spotlight::before{top:auto;bottom:8px}
       const utterance = new SpeechSynthesisUtterance(text);
       const voice = pickDirectorVoice();
       if (voice) utterance.voice = voice;
-      utterance.rate = 1; utterance.pitch = 1;
+      utterance.rate = 1.25; utterance.pitch = 1;
       return new Promise(resolve => {
         let settled = false;
         const done = () => { if (settled) return; settled = true; clearTimeout(hardTimeout); if (directorSpeechDone === done) directorSpeechDone = null; resolve(); };
-        const hardTimeout = setTimeout(done, Math.min(30000, Math.max(17000, 5000 + text.length * 90)));
+        const hardTimeout = setTimeout(done, Math.min(24000, Math.max(12000, 4000 + text.length * 70)));
         utterance.onend = done;
         utterance.onerror = done;
         directorSpeechDone = done;
@@ -2196,22 +2196,6 @@ details.director-spotlight::before{top:auto;bottom:8px}
     const bar = $('#directorSubtitle');
     if (bar) bar.textContent = text;
     directorSpeak(text);
-  }
-  function showcaseCueSync(text) {
-    const bar = $('#directorSubtitle');
-    if (bar) bar.textContent = text;
-    return directorSpeak(text);
-  }
-  function waitDirector(ms) {
-    return new Promise(resolve => {
-      const started = Date.now();
-      const check = () => {
-        if (directorStop) { resolve(); return; }
-        if (Date.now() - started >= ms) { resolve(); return; }
-        setTimeout(check, 100);
-      };
-      check();
-    });
   }
   function focusCard(element) {
     if (!element) return;
@@ -2240,9 +2224,10 @@ details.director-spotlight::before{top:auto;bottom:8px}
     $('#directorSubtitleBar').hidden = false;
     clearInterval(directorTick);
     directorTick = setInterval(() => {
-      const elapsed = Date.now() - directorStart;
-      const mm = String(Math.floor(elapsed / 60000)).padStart(2, '0');
-      const ss = String(Math.floor(elapsed / 1000) % 60).padStart(2, '0');
+      const elapsed = performance.now() - directorStart;
+      const total = Math.floor(elapsed / 1000);
+      const mm = String(Math.floor(total / 60)).padStart(2, '0');
+      const ss = String(total % 60).padStart(2, '0');
       const clock = $('#directorClock');
       if (clock) clock.textContent = `${mm}:${ss} / 03:00`;
       const bar = $('#directorProgress');
@@ -2265,28 +2250,30 @@ details.director-spotlight::before{top:auto;bottom:8px}
     return new Promise(resolve => {
       const check = () => {
         if (directorStop || directorSkip) { directorSkip = false; resolve(); return; }
-        if (Date.now() - directorStart >= ms) { resolve(); return; }
-        setTimeout(check, 250);
+        if (performance.now() - directorStart >= ms) { resolve(); return; }
+        setTimeout(check, 100);
       };
       check();
     });
   }
   function directorActs(metrics) {
-    const mttd = metrics && Number.isFinite(metrics.mttdMs) ? `${metrics.mttdMs}-millisecond` : 'millisecond';
-    const mttr = metrics && Number.isFinite(metrics.mttrMs) ? `${metrics.mttrMs}-millisecond` : 'millisecond';
+    const mttd = metrics && Number.isFinite(metrics.mttdMs) ? `${metrics.mttdMs} milliseconds` : 'milliseconds';
+    const mttr = metrics && Number.isFinite(metrics.mttrMs) ? `${metrics.mttrMs} milliseconds` : 'milliseconds';
+    const mttdShort = metrics && Number.isFinite(metrics.mttdMs) ? `${metrics.mttdMs}ms` : '—';
+    const mttrShort = metrics && Number.isFinite(metrics.mttrMs) ? `${metrics.mttrMs}ms` : '—';
     const trustedNow = latestStatuses.filter(node => node.mode === 'trusted').length;
     const nodeCount = latestStatuses.length || 3;
     const scenarioLine = metrics && typeof metrics.scenariosPass === 'string' ? metrics.scenariosPass : 'a fully verified synthetic security scenario suite';
     return [
-      { n: 1, title: 'Cluster Baseline & Meta AI Readiness', end: 16, prov: '🧠 Powered by Meta Model API: muse-spark-1.3', focus: () => $('#frontierPanel'), action: async () => { await load(); }, live: () => { const trusted = latestStatuses.filter(node => node.mode === 'trusted').length; return `Live baseline confirmed: ${trusted} of ${latestStatuses.length || nodeCount} nodes trusted, posture ${(($('#defcon') || {}).textContent) || 'verified secure'}. The Meta AI defense pipeline is connected and standing by.`; }, narration: `Welcome to AegisQuorum: an autonomous bio-digital immune system for edge clusters, powered by Meta Muse Spark 1.3, Baseten Open-Weights, and SAM 3.1 inside an Ed25519 cryptographic boundary. ${trustedNow} of ${nodeCount} nodes are currently verified and trusted.` },
-      { n: 2, title: 'Live Tamper Injection & Chameleon Honeypot', end: 36, prov: '🎭 Powered by Baseten Open-Weights: meta-models/muse-spark-open-1026', focus: () => $('#meshStudio'), action: async () => { await runStepExclusive('tamper'); if (directorStop) return null; return runStepExclusive('deception'); }, live: result => { if (!result) return null; const models = (result.modelsInvoked || []).join(' + ') || 'the local synthetic fallback'; return `The decoy just answered the attacker live via ${models}; signed threat fingerprint ${String((result.threatFingerprint && result.threatFingerprint.digest) || '').slice(0, 16)} recorded in the audit ledger.`; }, narration: `We now inject live file tampering on Node A. Within ${mttd} of benchmark-measured detection time, SHA-256 integrity monitoring quarantines Node A and transforms it into a Chameleon decoy honeypot powered by Baseten muse-spark-open-1026, trapping the attacker with synthetic responses.` },
-      { n: 3, title: 'Ed25519 Antibody Gossip & Pre-Cog SIR Containment', end: 54, prov: '🎭 Powered by Baseten Open-Weights: meta-models/muse-spark-open-1026', focus: () => $('#meshStudio'), action: async () => runStepExclusive('gossip'), live: result => { const receipts = result && Array.isArray(result.deliveries) ? result.deliveries.length : 0; const r0 = latestPreCog && Number.isFinite(latestPreCog.sirBetaValue) && Number.isFinite(latestPreCog.sirGammaValue) && latestPreCog.sirGammaValue ? (latestPreCog.sirBetaValue / latestPreCog.sirGammaValue).toFixed(2) : null; return `Gossip complete: ${receipts || 'peer'} signed inoculation receipt${receipts === 1 ? '' : 's'} verified by Nodes B and C${r0 ? `, with SIR R-naught ${r0} containment computed` : ''}.`; }, narration: 'While the attacker is trapped in the honeypot, Node A gossips an Ed25519-signed threat antibody to Nodes B and C, inoculating the cluster and computing epidemiological SIR containment metrics.' },
-      { n: 4, title: 'SAM 3.1 Multiplexed Visual & Voice Forensics', end: 75, prov: '👁️ Powered by Meta SAM 3.1 + Muse Voice Transcribe 1.0', focus: () => { const drawer = $('#advancedControls'); if (drawer && !drawer.open) drawer.open = true; return $('#forensicsStudio'); }, action: async () => { try { const result = await runStepExclusive('forensics', { rack: true }); if (result) renderRackOverlay(result); return result; } catch (error) { statusMessage(`Rack scan unavailable: ${error.message}`); return null; } }, live: result => { if (!result) return null; const boxes = (result.redactionBoxes || []).length; const cited = (result.verifiedEventIds || []).length; return `${result.providerMode || 'Deterministic Fallback'}: SAM isolated ${boxes} sensitive region${boxes === 1 ? '' : 's'} in a single pass, correlated to ${cited} verified audit event${cited === 1 ? '' : 's'}; voice channel reports ${result.voiceTranscriptSource || 'no transcript'}. Raw media never left the redaction boundary.`; }, narration: 'Next, SAM 3.1 performs a single-pass 16-object multiplexed visual inspection across the edge server rack, isolating physical tamper anomalies and correlating them directly with our hash-chained audit ledger — and when no segmentation provider answers, the dashboard says so instead of faking it.' },
-      { n: 5, title: 'Meta Muse Spark 1.3 Incident Analysis', end: 96, prov: '🧠 Powered by Meta Model API: muse-spark-1.3', focus: () => $('#forensicsStudio'), action: async () => { try { const started = Date.now(); const result = await api('/api/incident-analysis', { method: 'POST', body: {}, timeoutMs: 65000 }); setProvider(result, ['muse-spark-1.3']); renderAnalyst(result); updateFrontierTelemetry(result, Date.now() - started); return result; } catch (error) { statusMessage(`Incident analysis unavailable: ${error.message}`); return null; } }, live: result => { if (!result) return null; const analysis = result.analysis || {}; const cited = (result.verifiedEventIds || []).length; const summary = analysis.incidentSummary && analysis.incidentSummary.statement ? String(analysis.incidentSummary.statement).slice(0, 200) : null; const mitre = Array.isArray(analysis.mitreTechniques) ? analysis.mitreTechniques.slice(0, 3).map(item => String((item && (item.id || item.technique)) || item)).join(', ') : ''; return `Live ${result.providerMode || 'deterministic'} forensic read-out${summary ? `: ${summary}` : ''}${cited ? ` Every claim is cited to ${cited} verified audit event${cited === 1 ? '' : 's'}.` : ''}${mitre ? ` MITRE ATT&CK mapping: ${mitre}.` : ''}`; }, narration: 'The incident analyst — Meta Muse Spark 1.3 when the provider answers, honestly labelled deterministic mode when it does not — analyzes the sanitized, independently verified audit projection. Our boundary strips out prompt-injection attempts and maps every finding to verified event IDs and MITRE ATT&CK techniques.' },
-      { n: 6, title: 'Policy Synthesis & 50-Event Dry-Run Certificate', end: 114, prov: '🧠 Powered by Meta Model API: muse-spark-1.3', focus: () => $('#policyStudio'), action: async () => runStepExclusive('synthesize'), live: result => { if (!result || !result.sandbox) return null; const sandbox = result.sandbox; const replayed = sandbox.replayedEventsCount ?? sandbox.replayEventsTested; return `Candidate policy drafted in ${result.providerMode || 'deterministic'} mode: ${replayed} of 50 verified events replayed in the sandbox with ${sandbox.falsePositives} false positives and a ${sandbox.safetyScore}% safety score. The signed dry-run certificate is recorded; application still needs the human quorum.`; }, narration: 'To heal the cluster safely, our synthesizer generates a remediation policy and validates it against a 50-event deterministic sandbox dry-run, issuing a cryptographically signed proof certificate.' },
+      { n: 1, title: 'Cluster Baseline & Meta AI Readiness', end: 16, prov: '🧠 Powered by Meta Model API: muse-spark-1.3', focus: () => $('#frontierPanel'), action: async () => { await load(); }, live: () => { const trusted = latestStatuses.filter(node => node.mode === 'trusted').length; return `Live baseline confirmed: ${trusted} of ${latestStatuses.length || nodeCount} nodes trusted, posture ${(($('#defcon') || {}).textContent) || 'verified secure'}. The Meta AI defense pipeline is connected and standing by.`; }, narration: `AegisQuorum: an autonomous bio-digital immune system for edge clusters — powered by Meta Muse Spark 1.3, Baseten Open-Weights, and SAM 3.1 inside an Ed25519 cryptographic boundary. ${trustedNow} of ${nodeCount} nodes verified and trusted.` },
+      { n: 2, title: 'Live Tamper Injection & Chameleon Honeypot', end: 36, prov: '🎭 Powered by Baseten Open-Weights: meta-models/muse-spark-open-1026', focus: () => $('#meshStudio'), action: async () => { await directorStep('tamper'); if (directorStop) return null; return directorStep('deception'); }, live: result => { if (!result) return null; const models = (result.modelsInvoked || []).join(' + ') || 'the local synthetic fallback'; return `The decoy just answered the attacker live via ${models}; signed threat fingerprint ${String((result.threatFingerprint && result.threatFingerprint.digest) || '').slice(0, 16)} recorded in the audit ledger.`; }, narration: `Injecting live tamper on Node A. In ${mttd}, integrity checks quarantine the node and spawn a Chameleon decoy via Baseten muse-spark-open-1026, trapping the attacker.` },
+      { n: 3, title: 'Ed25519 Antibody Gossip & Pre-Cog SIR Containment', end: 54, prov: '🎭 Powered by Baseten Open-Weights: meta-models/muse-spark-open-1026', focus: () => $('#meshStudio'), action: async () => directorStep('gossip'), live: result => { const receipts = result && Array.isArray(result.deliveries) ? result.deliveries.length : 0; const r0 = latestPreCog && Number.isFinite(latestPreCog.sirBetaValue) && Number.isFinite(latestPreCog.sirGammaValue) && latestPreCog.sirGammaValue ? (latestPreCog.sirBetaValue / latestPreCog.sirGammaValue).toFixed(2) : null; return `Gossip complete: ${receipts || 'peer'} signed inoculation receipt${receipts === 1 ? '' : 's'} verified by Nodes B and C${r0 ? `, with SIR R-naught ${r0} containment computed` : ''}.`; }, narration: 'Node A gossips an Ed25519-signed threat antibody. Nodes B and C verify the signature and inoculate themselves. Pre-Cog metrics bound the lateral spread.' },
+      { n: 4, title: 'SAM 3.1 Multiplexed Visual & Voice Forensics', end: 75, prov: '👁️ Powered by Meta SAM 3.1 + Muse Voice Transcribe 1.0', focus: () => { const drawer = $('#advancedControls'); if (drawer && !drawer.open) drawer.open = true; return $('#forensicsStudio'); }, action: async () => { try { const result = await directorStep('forensics', { rack: true }); if (result) renderRackOverlay(result); return result; } catch (error) { statusMessage(`Rack scan unavailable: ${error.message}`); return null; } }, live: result => { if (!result) return null; const boxes = (result.redactionBoxes || []).length; const cited = (result.verifiedEventIds || []).length; return `${result.providerMode || 'Deterministic Fallback'}: SAM isolated ${boxes} sensitive region${boxes === 1 ? '' : 's'} in a single pass, correlated to ${cited} verified audit event${cited === 1 ? '' : 's'}; voice channel reports ${result.voiceTranscriptSource || 'no transcript'}. Raw media never left the redaction boundary.`; }, narration: 'SAM 3.1 executes a 16-object multiplexed visual scan. It isolates physical tamper anomalies on the rack and correlates them with the audit ledger. No raw media is exposed.' },
+      { n: 5, title: 'Meta Muse Spark 1.3 Incident Analysis', end: 96, prov: '🧠 Powered by Meta Model API: muse-spark-1.3', focus: () => $('#forensicsStudio'), action: async () => { try { const started = Date.now(); const result = await api('/api/incident-analysis', { method: 'POST', body: {}, timeoutMs: 65000 }); setProvider(result, ['muse-spark-1.3']); renderAnalyst(result); updateFrontierTelemetry(result, Date.now() - started); return result; } catch (error) { statusMessage(`Incident analysis unavailable: ${error.message}`); return null; } }, live: result => { if (!result) return null; const analysis = result.analysis || {}; const cited = (result.verifiedEventIds || []).length; const summary = analysis.incidentSummary && analysis.incidentSummary.statement ? String(analysis.incidentSummary.statement).slice(0, 200) : null; const mitre = Array.isArray(analysis.mitreTechniques) ? analysis.mitreTechniques.slice(0, 3).map(item => String((item && (item.id || item.technique)) || item)).join(', ') : ''; return `Live ${result.providerMode || 'deterministic'} forensic read-out${summary ? `: ${summary}` : ''}${cited ? ` Every claim is cited to ${cited} verified audit event${cited === 1 ? '' : 's'}.` : ''}${mitre ? ` MITRE ATT&CK mapping: ${mitre}.` : ''}`; }, narration: 'Meta Muse Spark 1.3 analyzes the evidence. It blocks prompt-injections, cites verified event IDs, and maps tactics to MITRE ATT&CK in real-time.' },
+      { n: 6, title: 'Policy Synthesis & 50-Event Dry-Run Certificate', end: 114, prov: '🧠 Powered by Meta Model API: muse-spark-1.3', focus: () => $('#policyStudio'), action: async () => directorStep('synthesize'), live: result => { if (!result || !result.sandbox) return null; const sandbox = result.sandbox; const replayed = sandbox.replayedEventsCount ?? sandbox.replayEventsTested; return `Candidate policy drafted in ${result.providerMode || 'deterministic'} mode: ${replayed} of 50 verified events replayed in the sandbox with ${sandbox.falsePositives} false positives and a ${sandbox.safetyScore}% safety score. The signed dry-run certificate is recorded; application still needs the human quorum.`; }, narration: 'Synthesis engine drafts a remediation policy. It is validated against a 50-event deterministic sandbox dry-run, generating a signed proof certificate.' },
       { n: 7, title: 'Ask-Before-Act Quorum & Recovery Proof', end: 134, prov: '🔐 Ed25519 2-of-3 quorum + signed snapshot', focus: () => $('#policyStudio'), action: async () => {
-        await runStepExclusive('quorum');
-        const recovered = await runStepExclusive('rollback');
+        await directorStep('quorum');
+        const recovered = await directorStep('rollback');
         try {
           focusCard($('#proofExplorer'));
           const loadButton = document.querySelector('#proofLoad');
@@ -2296,11 +2283,11 @@ details.director-spotlight::before{top:auto;bottom:8px}
           if (loadButton) {
             loadButton.click();
             const t0 = Date.now();
-            while (!/CERTIFICATE/.test(document.querySelector('#proofBadge')?.textContent || '') && Date.now() - t0 < 15000) await new Promise(resolve => setTimeout(resolve, 250));
+            while (!/CERTIFICATE/.test(document.querySelector('#proofBadge')?.textContent || '') && Date.now() - t0 < 8000) await new Promise(resolve => setTimeout(resolve, 250));
             if (verifyButton && !verifyButton.disabled) {
               verifyButton.click();
               const t1 = Date.now();
-              while (!/CHECK|PROOF/.test(document.querySelector('#proofBadge')?.textContent || '') && Date.now() - t1 < 25000) await new Promise(resolve => setTimeout(resolve, 300));
+              while (!/CHECK|PROOF/.test(document.querySelector('#proofBadge')?.textContent || '') && Date.now() - t1 < 12000) await new Promise(resolve => setTimeout(resolve, 300));
             }
           }
         } catch { /* the Proof Explorer reports its own truthful state */ }
@@ -2312,7 +2299,7 @@ details.director-spotlight::before{top:auto;bottom:8px}
         if (!result && !proofLine) return null;
         const measured = mttr !== null ? `${mttr} milliseconds this session` : (metrics && Number.isFinite(metrics.mttrMs) ? `${metrics.mttrMs} milliseconds in the benchmark harness` : 'benchmark-measured time');
         return `Recovery verdict: ${(result && result.operationStatus) || 'completed'}. Node A rolled back to its signed snapshot and passed the post-recovery integrity scan in ${measured}.${proofLine}`;
-      }, narration: `Because AI is strictly advisory-only, our Ask-Before-Act gate enforces a 2-of-3 quorum: the panel as two real offline authority signatures are verified against this proposal, while the biometric passkey ceremony remains a separate human path. Node A then rolls back to its signed snapshot and verifies clean recovery — a ${mttr} mean recovery time in the benchmark harness, with the full proof assembled in the Proof Explorer.` },
+      }, narration: `AI is advisory-only. A 2-of-3 quorum verifies two real authority signatures on the fix — the biometric passkey ceremony stays human. Node A rolls back to its signed snapshot; recovery verified in ${mttr}.` },
       { n: 8, title: 'Red vs Blue Live Simulator', end: 152, prov: '⚔️ Red vs Blue · 5-attack live simulation', focus: () => $('#redteam-root'), action: async () => {
         ensureAdminTokenFromInput();
         syncRedTeamToken();
@@ -2323,10 +2310,37 @@ details.director-spotlight::before{top:auto;bottom:8px}
           while (button.disabled && !directorStop && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 250));
         }
         await new Promise(resolve => setTimeout(resolve, 800));
-      }, live: () => { const blocked = (document.querySelector('#rtBlocked') || {}).textContent; const attempted = (document.querySelector('#rtAttempted') || {}).textContent; if (blocked && attempted && attempted !== '0') return `Red team complete: ${blocked} of ${attempted} adversarial attacks blocked live by the blue team.`; const statusText = (document.querySelector('#rtStatus') || {}).textContent || ''; return /Complete/.test(statusText) ? statusText : null; }, narration: 'Now running our live Red versus Blue simulator: five adversarial attacks including replay, unauthorized tokens, and quorum bypass are fired at isolated nodes and blocked in real time.' },
-      { n: 9, title: '360° Audit Ledger, Timeline & STIX 2.1', end: 168, prov: '🔏 SHA-256 + Ed25519 audit proof · STIX 2.1', focus: () => $('#auditVault'), action: async () => { try { await loadAudit(); renderAuditTab('hashchain'); await api('/api/timeline'); await api('/api/hackathon-manifest'); await api('/api/threat-intel/export'); } catch (error) { statusMessage(`Evidence refresh unavailable: ${error.message}`); } }, live: () => { const ledger = latestAudit360; if (!ledger) return null; const checks = ledger.hashChainLedger.chainVerificationStatus || []; const ok = checks.filter(item => item.valid).length; return `Browser-verified proof: ${ok} of ${checks.length} signed node chains intact, six audit dimensions refreshed, and the STIX 2.1 threat-intelligence bundle exported with sanitized indicators.`; }, narration: 'Every action is anchored to our six-dimension 360-degree audit ledger and exported as a sanitized STIX 2.1 threat-intelligence bundle.' },
-      { n: 10, title: 'Benchmarks & Grand Finale', end: 180, prov: '⏱️ Measured benchmarks · nothing staged', focus: () => $('#redteam-root'), action: async () => { const button = document.querySelector('#rtBenchRefresh'); if (button) button.click(); }, narration: `With a ${mttd} Mean Time to Detect, a ${mttr} Mean Time to Recover, and ${scenarioLine}, AegisQuorum proves that frontier AI and zero-trust cryptography can defend critical infrastructure autonomously. Thank you!` }
+      }, live: () => { const blocked = (document.querySelector('#rtBlocked') || {}).textContent; const attempted = (document.querySelector('#rtAttempted') || {}).textContent; if (blocked && attempted && attempted !== '0') return `Red team complete: ${blocked} of ${attempted} adversarial attacks blocked live by the blue team.`; const statusText = (document.querySelector('#rtStatus') || {}).textContent || ''; return /Complete/.test(statusText) ? statusText : null; }, narration: 'Red vs Blue Simulator active. Firing five concurrent attacks: Tamper, Replay, Quorum Bypass, Bad Token, Decoy Probe. All blocked deterministically.' },
+      { n: 9, title: '360° Audit Ledger, Timeline & STIX 2.1', end: 168, prov: '🔏 SHA-256 + Ed25519 audit proof · STIX 2.1', focus: () => $('#auditVault'), action: async () => { try { await loadAudit(); renderAuditTab('hashchain'); await api('/api/timeline'); await api('/api/hackathon-manifest'); await api('/api/threat-intel/export'); } catch (error) { statusMessage(`Evidence refresh unavailable: ${error.message}`); } }, live: () => { const ledger = latestAudit360; if (!ledger) return null; const checks = ledger.hashChainLedger.chainVerificationStatus || []; const ok = checks.filter(item => item.valid).length; return `Browser-verified proof: ${ok} of ${checks.length} signed node chains intact, six audit dimensions refreshed, and the STIX 2.1 threat-intelligence bundle exported with sanitized indicators.`; }, narration: 'Every action is anchored to our 6-dimension 360-degree audit ledger and exported as a sanitized STIX 2.1 threat bundle.' },
+      { n: 10, title: 'Benchmarks & Grand Finale', end: 180, prov: '⏱️ Measured benchmarks · nothing staged', focus: () => $('#redteam-root'), action: async () => { const button = document.querySelector('#rtBenchRefresh'); if (button) button.click(); }, narration: `${mttdShort} detect. ${mttrShort} recover. ${scenarioLine}. AegisQuorum delivers production-grade autonomous defense for the Meta Hackathon. Thank you!` }
     ];
+  }
+  // Director variant: waits for any in-flight stage instead of skipping it, so
+  // hard act transitions never cause a real stage to be dropped.
+  async function directorStep(step, options) {
+    while (stepInFlight && !directorStop) await new Promise(resolve => setTimeout(resolve, 200));
+    if (directorStop) return null;
+    return runStepExclusive(step, options);
+  }
+  // Strict time-slice act start: voice + scroll/spotlight + subtitle + the real
+  // API action all fire at the act boundary; nothing awaits the voice.
+  function startDirectorAct(act) {
+    setDirectorAct(act);
+    focusCard(act.focus());
+    const bar = $('#directorSubtitle');
+    if (bar) bar.textContent = act.narration;
+    directorSpeak(act.narration);
+    if (!act.action) return;
+    Promise.resolve().then(() => act.action()).then(result => {
+      if (directorStop) return;
+      if (act.prov) setDirectorProv(directorProvFromResult(act.prov, result));
+      if (typeof act.live === 'function') {
+        try {
+          const extra = act.live(result);
+          if (extra && performance.now() - directorStart < act.end * 1000 - 1500) showcaseCue(extra);
+        } catch { /* live telemetry is best-effort */ }
+      }
+    }).catch(error => statusMessage(`${act.title}: ${error.message}`));
   }
   async function runDirectorShowcase() {
     if (directorActive) return;
@@ -2352,43 +2366,30 @@ details.director-spotlight::before{top:auto;bottom:8px}
       const scenarioText = Array.isArray(bench.scenarios) && bench.scenarios.length ? `${bench.scenarios.filter(s => s.pass).length} out of ${bench.scenarios.length} security scenarios passing` : null;
       directorMetrics = { ...(bench.metrics || {}), scenariosPass: scenarioText };
     } catch { directorMetrics = null; }
-    directorStart = Date.now();
+    directorStart = performance.now();
     showDirectorHud();
     try { directorKeepAlive = setInterval(() => { try { if (window.speechSynthesis && window.speechSynthesis.speaking) window.speechSynthesis.resume(); } catch {} }, 5000); } catch { directorKeepAlive = 0; }
     try {
-      for (const act of directorActs(directorMetrics)) {
+      // Strict Time-Slice Scheduler: hardcoded act boundaries (ms). Each act
+      // starts exactly at its slot; any lagging audio from the previous act is
+      // force-cancelled at the boundary.
+      const TIMELINE = [[0, 15000], [15000, 33000], [33000, 50000], [50000, 69000], [69000, 88000], [88000, 105000], [105000, 128000], [128000, 145000], [145000, 161000], [161000, 180000]];
+      const cutVoiceAtBoundary = () => { if (directorSpeechDone) { directorSpeechDone(); } try { window.speechSynthesis?.cancel(); } catch {} };
+      const acts = directorActs(directorMetrics);
+      for (let index = 0; index < acts.length; index++) {
         if (directorStop) break;
-        setDirectorAct(act);
-        focusCard(act.focus());                 // smooth-scroll to center + spotlight glow
-        await waitDirector(1000);               // let the scroll settle on camera
+        const slot = TIMELINE[index];
+        const act = { ...acts[index], end: slot[1] / 1000 };
+        await waitDirectorUntil(slot[0]);       // time-lock to the hard start
         if (directorStop) break;
-        // Voice and the real action run concurrently (strict await on BOTH
-        // before the live cue: no inter-act overlap, no fake 'done' states —
-        // stages flip to done only when the genuine call completes).
-        let liveResult;
-        const narrationDone = showcaseCueSync(act.narration);
-        const actionDone = (async () => {
-          if (!act.action) return;
-          try { liveResult = await act.action(); }
-          catch (error) { statusMessage(`${act.title}: ${error.message}`); }
-        })();
-        await narrationDone;
-        if (directorStop) break;                // Stop: no new act starts; an in-flight real op finishes honestly
-        await actionDone;
-        if (directorStop) break;
-        if (act.prov) setDirectorProv(directorProvFromResult(act.prov, liveResult));
-        if (typeof act.live === 'function') {
-          try { const extra = act.live(liveResult); if (extra) await showcaseCueSync(extra); } catch { /* live telemetry narration is best-effort */ }
-        }
-        if (directorStop) break;
-        await waitDirector(1500);               // beat before the next act
-        await waitDirectorUntil(act.end * 1000);
+        cutVoiceAtBoundary();                    // force-cancel lagging audio at the boundary
+        startDirectorAct(act);                   // everything fires at once; no awaits
       }
       if (!directorStop) {
+        await waitDirectorUntil(180000);
         focusCard($('.hero'));
         syncBenchmarkScoreboard();
-        await showcaseCueSync('Showcase complete. All evidence remains available in the Proof Explorer and the 360-degree audit vault.');
-        await waitDirectorUntil(183000);
+        statusMessage('Showcase complete · 3:00 · all evidence remains in the Proof Explorer and the 360-degree audit vault.');
       }
     } finally {
       stopDirector();

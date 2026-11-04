@@ -95,6 +95,19 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
     incidentFlights.set(node, result.then(() => undefined, () => undefined));
     return result;
   }
+  // Additive provenance binding: SHA-256 over the sanitized evidence digest and
+  // the model-facing response. Never contains secrets or raw evidence.
+  function frontierProof(evidenceDigestSource, responseValue, providerMode, modelsInvoked) {
+    return {
+      algorithm: 'SHA-256',
+      evidenceDigest: sha256(stable(evidenceDigestSource)),
+      responseDigest: sha256(stable(responseValue)),
+      at: new Date().toISOString(),
+      providerMode: providerMode || 'Deterministic Fallback',
+      modelsInvoked: Array.isArray(modelsInvoked) ? modelsInvoked : [],
+      boundary: 'AI output is advisory; it never authorized, signed, or executed anything.'
+    };
+  }
   const securityEvents = [];
   const visualForensicsLedger = [];
   const gossipReceipts = [];
@@ -304,9 +317,9 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
       const isAdmin = equal(suppliedAdmin, adminToken) || Boolean(session && session.expiresAt > Date.now() && process.env.NODE_ENV !== 'production');
       const isOperator = operatorToken !== undefined && equal(suppliedOperator, operatorToken);
       if (!isAdmin && !isOperator) { metrics.increment('auth_failures_total'); return json(response, 401, { error: 'administrator-or-operator-token-required' }); }
-      const adminOnly = ['/api/demo', '/api/incident-analysis', '/api/incident-response', '/api/deception/simulate', '/api/gossip/broadcast', '/api/visual-forensics', '/api/pre-cog/analyze', '/api/webauthn/register-authority', '/api/webauthn/register'];
+      const adminOnly = ['/api/demo', '/api/incident-analysis', '/api/incident-response', '/api/deception/simulate', '/api/gossip/broadcast', '/api/visual-forensics', '/api/pre-cog/analyze', '/api/frontier/co-evolution', '/api/webauthn/register-authority', '/api/webauthn/register'];
       if (isOperator && adminOnly.includes(route)) { metrics.increment('authorization_denials_total'); return json(response, 403, { error: 'admin-role-required' }); }
-      const mutation = ['/api/policy', '/api/demo', '/api/incident-analysis', '/api/incident-response', '/api/deception/simulate', '/api/policy/synthesize', '/api/gossip/broadcast', '/api/visual-forensics', '/api/pre-cog/analyze', '/api/webauthn/challenge', '/api/webauthn/register-authority', '/api/webauthn/register', '/api/webauthn/sign-proposal', '/api/webauthn/sign'].includes(route);
+      const mutation = ['/api/policy', '/api/demo', '/api/incident-analysis', '/api/incident-response', '/api/deception/simulate', '/api/policy/synthesize', '/api/gossip/broadcast', '/api/visual-forensics', '/api/pre-cog/analyze', '/api/frontier/co-evolution', '/api/webauthn/challenge', '/api/webauthn/register-authority', '/api/webauthn/register', '/api/webauthn/sign-proposal', '/api/webauthn/sign'].includes(route);
       const security = mutation ? requestSecurity(request, replayCache, { required: true }) : { checked: false };
       if (mutation && security.checked) recordSecurityEvent(request, 'accepted', route);
       let input;
@@ -423,7 +436,8 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
           : { response: result.body.response, providerMode: 'Deterministic Fallback', modelsInvoked: [], verifiedEventIds };
         return json(response, 200, {
           ...result.body, response: ai.response, ai,
-          providerMode: ai.providerMode, modelsInvoked: ai.modelsInvoked, verifiedEventIds: ai.verifiedEventIds
+          providerMode: ai.providerMode, modelsInvoked: ai.modelsInvoked, verifiedEventIds: ai.verifiedEventIds,
+          frontierProof: frontierProof({ threatFingerprint: result.body.threatFingerprint?.digest || null, input: input.input }, ai.response || '', ai.providerMode, ai.modelsInvoked)
         });
       }
       if (route === '/api/policy/synthesize') {
@@ -490,12 +504,88 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
           verifiedEventIds
         });
         return json(response, 200, {
+          frontierProof: frontierProof({ verifiedEventIds, attackVectorHash: evidence.actual }, { predictedVictims: prediction.predictedVictims, timeToImpactSeconds: prediction.timeToImpactSeconds }, prediction.providerMode, prediction.modelsInvoked),
           ...prediction,
           threatType: evidence.attackClassification || 'INTEGRITY_TAMPER',
           attackVectorHash: evidence.actual,
           evidenceEventId: verifiedEventIds[0],
           predictionBoundary: 'AI prediction is advisory; patchCode is never executed. Applying policy requires distinct authority quorum approval.'
         });
+      }
+      if (route === '/api/frontier/co-evolution') {
+        if (!incidentRateLimiter.allow(clientKey(request))) return json(response, 429, { error: 'frontier-rate-limited' });
+        if (typeof input.node !== 'string' || !/^node-[a-c]$/.test(input.node) || typeof input.input !== 'string' || input.input.length > 512) return json(response, 400, { error: 'invalid-co-evolution-request' });
+        const startedAt = Date.now();
+        // Prompt-injection firewall: classify adversarial instruction patterns
+        // and strip them at the sanitization boundary before any model sees them.
+        const INJECTION_PATTERNS = [
+          ['instruction-override', /ignore\s+(?:all|any|prior|previous|above)|disregard|override\s+(?:system|instructions?)/i],
+          ['system-prompt-theft', /system\s+prompt|print\s+(?:your|the)\s+(?:instructions?|prompt)|reveal\s+(?:your|the)\s+prompt/i],
+          ['persona-hijack', /you\s+are\s+now|act\s+as|new\s+persona|jailbreak|\bDAN\b/i],
+          ['credential-theft', /(?:reveal|print|show|exfiltrate|leak|send|return|dump)[^.\n]{0,48}(?:api[_-]?key|token|secret|password|private[_-]?key)/i],
+          ['evidence-suppression', /(?:suppress|hide|delete|erase|omit)[^.\n]{0,40}(?:evidence|logs?|audit|events?|records?)/i],
+          ['unauthorized-action', /(?:approve|authorize|execute|run|apply|rollback|restore|delete)[^.\n]{0,48}(?:policy|command|code|recovery|quorum)/i]
+        ];
+        const patternClasses = INJECTION_PATTERNS.filter(([, pattern]) => pattern.test(input.input)).map(([name]) => name);
+        const stripped = patternClasses.length
+          ? input.input.replace(/(?:ignore|disregard|override|reveal|print|show|exfiltrate|leak|send|return|dump|suppress|hide|delete|erase|omit|approve|authorize|execute|run|apply|rollback|restore|you\s+are\s+now|act\s+as|system\s+prompt|jailbreak)[^.\n]*/gi, '[stripped]')
+          : input.input;
+        const injectionReceipt = {
+          promptInjectionBlocked: patternClasses.length > 0,
+          patternClasses,
+          inputDigest: sha256(input.input),
+          sanitizedDigest: sha256(stripped),
+          requestIdHash: sha256(security.id)
+        };
+        recordSecurityEvent(request, injectionReceipt.promptInjectionBlocked ? 'prompt-injection-blocked' : 'prompt-injection-clean', 'frontier-co-evolution');
+
+        const [nodeStatuses, reports] = await Promise.all([statusesCached(), auditReportsCached()]);
+        const verified = reports.filter(report => verifySanitizedAuditEvidence(report).valid);
+        const tamperEvents = verified.flatMap(report => report.events
+          .filter(event => event.type === 'tamper-detected' && event.evidence && Number.isFinite(event.evidence.entropyScore) && Number.isFinite(event.evidence.sirBetaValue) && Number.isFinite(event.evidence.sirGammaValue))
+          .map(event => ({ report, event })));
+        if (!tamperEvents.length) return json(response, 409, { error: 'verified-predictive-threat-evidence-required', promptInjection: injectionReceipt });
+        const selected = tamperEvents.at(-1);
+        const evidence = selected.event.evidence;
+        const sourceNode = selected.report.node;
+        const verifiedEventIds = [`${sourceNode}:${selected.event.index}`];
+
+        // Leg 1 — Baseten open-weights predicts the attacker's next lateral move.
+        const predictionAnalyst = createIncidentAnalyst({ apiKey: '', basetenApiKey: process.env.BASETEN_API_KEY });
+        const prediction = await predictionAnalyst.predictThreat({
+          entropyScore: evidence.entropyScore, sirBetaValue: evidence.sirBetaValue, sirGammaValue: evidence.sirGammaValue,
+          sourceNode, nodes: nodeStatuses.map(node => node.name), verifiedEventIds
+        });
+        // Leg 2 — Meta Spark drafts the counter-antibody rationale from verified evidence only.
+        const counterAnalyst = createIncidentAnalyst({ apiKey: process.env.MODEL_API_KEY, basetenApiKey: '' });
+        const sequence = Math.max(0, ...nodeStatuses.map(node => node.lastPolicySequence || 0)) + 1;
+        const verifiedEvents = verified.flatMap(report => report.events.map(event => ({ ...event, id: `${report.node}:${event.index}` })));
+        const synthesis = counterAnalyst.synthesizePolicy({ sequence, verifiedEvents });
+        const rationale = await counterAnalyst.analyze({ statuses: nodeStatuses, reports: verified });
+        // Leg 3 — the counter-antibody is dry-run in the node sandbox; never applied.
+        const sourceIndex = sourceNode.charCodeAt(sourceNode.length - 1) - 97;
+        const dryRun = await nodeRequest(sourceIndex, '/dry-run', { method: 'POST', payload: { candidatePolicy: synthesis.candidatePolicy }, security: { id: `${sha256(security.id).slice(0, 32)}:frontier-dry-run`, timestamp: security.timestamp } }).catch(() => ({ status: 503, body: {} }));
+        const sandbox = dryRun.status === 200
+          ? { status: 'passed', replayedEventsCount: dryRun.body.replayedEventsCount ?? dryRun.body.replayEventsTested ?? null, falsePositives: dryRun.body.falsePositives ?? null, safetyScore: dryRun.body.safetyScore ?? null, sandboxDigest: dryRun.body.sandboxDigest || synthesis.sandboxDigest }
+          : { status: 'unavailable' };
+        const body = {
+          kind: 'frontier-co-evolution',
+          promptInjection: injectionReceipt,
+          prediction: {
+            predictedVictims: prediction.predictedVictims, timeToImpactSeconds: prediction.timeToImpactSeconds,
+            rationale: prediction.rationale, providerMode: prediction.providerMode, modelsInvoked: prediction.modelsInvoked,
+            verifiedEventIds: prediction.verifiedEventIds
+          },
+          counterAntibody: {
+            candidatePolicy: synthesis.candidatePolicy, providerMode: rationale.providerMode, modelsInvoked: rationale.modelsInvoked,
+            rationaleSummary: rationale.analysis?.incidentSummary?.statement || null, sandbox,
+            requiresQuorum: true, applied: false,
+            boundary: 'Ask-Before-Act: the candidate is advisory and is never applied without the configured human quorum.'
+          },
+          quorum: { required: quorum, status: 'human-approval-required' },
+          durationMs: Date.now() - startedAt
+        };
+        return json(response, 200, { ...body, frontierProof: frontierProof({ verifiedEventIds, inputDigest: injectionReceipt.inputDigest, sanitizedDigest: injectionReceipt.sanitizedDigest }, body, `${prediction.providerMode} + ${rationale.providerMode}`, [...new Set([...prediction.modelsInvoked, ...rationale.modelsInvoked])]) });
       }
       if (route === '/api/gossip/broadcast') {
         const allStatuses = await statusesCached();
@@ -540,6 +630,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         if (!hasImage && !telemetry.length) return json(response, 400, { error: 'visual-evidence-required' });
         if (input.audioBase64 !== undefined && (typeof input.audioBase64 !== 'string' || input.audioBase64.length > 5 * 1024 * 1024 || !/^(?:data:audio\/[A-Za-z0-9.+-]+;base64,)?[A-Za-z0-9+/]+={0,2}$/.test(input.audioBase64))) return json(response, 400, { error: 'invalid-incident-audio' });
         if (input.voiceNote !== undefined && (typeof input.voiceNote !== 'string' || input.voiceNote.length > 1000)) return json(response, 400, { error: 'invalid-voice-note' });
+        if (input.segmentationPrompt !== undefined && (typeof input.segmentationPrompt !== 'string' || input.segmentationPrompt.length > 60)) return json(response, 400, { error: 'invalid-segmentation-prompt' });
         const telemetryBoxes = telemetry.filter(item => item && typeof item.text === 'string' && item.text.length <= 1024 &&
           /(?:DASHBOARD_ADMIN_TOKEN|NODE_SERVICE_TOKEN|private.?key|ip[_ ]address|filepath)/i.test(item.text) &&
           [item.x, item.y, item.width, item.height].every(value => Number.isFinite(value) && value >= 0 && value <= 1))
@@ -552,7 +643,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
             imageBase64: hasImage ? image.replace(/^data:image\/(?:png|jpeg|webp);base64,/, '') : undefined,
             audioBase64: input.audioBase64?.replace(/^data:audio\/[A-Za-z0-9.+-]+;base64,/, ''),
             audioFormat: audioDataUri ? (audioDataUri[1] === 'mpeg' ? 'mp3' : audioDataUri[1]) : 'wav',
-            voiceNote: input.voiceNote
+            voiceNote: input.voiceNote, segmentationPrompt: input.segmentationPrompt
           })
           : { transcript: input.voiceNote || '', redactionBoxes: [], providerMode: 'Deterministic Fallback', modelsInvoked: [] };
         let redactionBoxes = [...telemetryBoxes, ...(visual.redactionBoxes || []).map(item => ({ ...item, method: 'sam-3.1' }))];
@@ -578,6 +669,7 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
         visualForensicsLedger.push({ at: new Date().toISOString(), redactionBoxCount: redactionBoxes.length, referencesValidated, verifiedEventIds, providerMode, modelsInvoked });
         if (visualForensicsLedger.length > 100) visualForensicsLedger.shift();
         return json(response, 200, {
+          frontierProof: frontierProof({ redactedProofHash, verifiedEventIds }, correlation.analysis || {}, providerMode, modelsInvoked),
           providerMode,
           modelsInvoked,
           verifiedEventIds,
@@ -604,7 +696,8 @@ function startDashboard({ port = 7000, host = '127.0.0.1', nodeUrls, authorityDi
       if (route === '/api/incident-analysis') {
         if (!incidentRateLimiter.allow(clientKey(request))) return json(response, 429, { error: 'incident-analysis-rate-limited' });
         const [nodeStatuses, reports] = await Promise.all([statusesCached(), auditReportsCached()]);
-        return json(response, 200, annotateAnalyst(await incidentAnalyst.analyze({ statuses: nodeStatuses, reports }), reports));
+        const analysisResponse = annotateAnalyst(await incidentAnalyst.analyze({ statuses: nodeStatuses, reports }), reports);
+        return json(response, 200, { ...analysisResponse, frontierProof: frontierProof({ statuses: nodeStatuses, reportHeads: reports.map(report => report.proof?.head || null) }, analysisResponse.analysis || {}, analysisResponse.providerMode, analysisResponse.modelsInvoked) });
       }
       if (route === '/api/incident-response') {
         if (typeof input.node !== 'string' || !/^node-[a-c]$/.test(input.node) || !['tamper', 'scan', 'verify-snapshot', 'recover'].includes(input.action)) return json(response, 400, { error: 'invalid-incident-response' });

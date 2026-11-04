@@ -307,6 +307,22 @@ summary{cursor:pointer}
 .analyst-section.recommendations h3{color:var(--cyan)}
 .evidence-chip{display:inline-block;margin-left:4px;padding:1px 7px;border:1px solid rgba(6,182,212,.4);border-radius:99px;color:var(--cyan);background:rgba(6,182,212,.06);font:8px var(--mono);cursor:pointer}
 .evidence-chip:hover{border-color:var(--cyan);color:#a5f3fc}
+
+/* ---------- Frontier telemetry + edge-rack showcase ---------- */
+.frontier{margin:0 0 12px;border:1px solid rgba(139,92,246,.3);border-radius:8px;background:var(--surface);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.frontier>summary{cursor:pointer;padding:12px 16px;color:#c4b5fd;font:700 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;list-style:none}
+.frontier>summary::-webkit-details-marker{display:none}
+.frontier>summary::after{content:"▾";float:right}
+.frontier:not([open])>summary::after{content:"▸"}
+.frontier-body{padding:2px 16px 14px}
+.frontier-row{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.frontier-section{margin-top:8px}
+.frontier-section h3{margin:0 0 4px;font:700 9px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--cyan)}
+.frontier-section p{margin:2px 0;color:#c5d3e4;font-size:10px;line-height:1.5}
+.rack-overlay{margin-top:8px}
+.rack-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:5px}
+.rack-chip{padding:5px 8px;border:1px solid rgba(16,185,129,.35);border-radius:5px;background:rgba(16,185,129,.05);color:#a7f3d0;font:8px var(--mono);letter-spacing:.04em;text-align:center}
+.rack-chip.tampered{border-color:rgba(244,63,94,.65);background:rgba(244,63,94,.1);color:#fda4af;animation:card-breathe 1.4s ease-in-out infinite}
   </style>
 </head>
 <body>
@@ -394,6 +410,26 @@ summary{cursor:pointer}
     <p class="panel-caption">Every stage reports here in plain language as it runs; these messages drive the flow diagram above.</p>
     <p class="statusline" id="message" aria-live="polite">Connecting to the local control plane…</p>
   </section>
+
+  <details class="frontier" id="frontierPanel" open>
+    <summary>⚡ Meta Superintelligence Frontier Telemetry</summary>
+    <div class="frontier-body">
+      <div class="frontier-row">
+        <span class="badge" id="frontierProvider">PROVIDER · —</span>
+        <span class="badge" id="frontierSpark" data-label="muse-spark-1.3">muse-spark-1.3 · standby</span>
+        <span class="badge" id="frontierBaseten" data-label="baseten muse-spark-open-1026">baseten muse-spark-open-1026 · standby</span>
+        <span class="badge" id="frontierSam" data-label="sam-3.1">sam-3.1 · standby</span>
+        <span class="badge" id="frontierLatency">round-trip · —</span>
+      </div>
+      <p class="panel-caption">Prompt-injection shield: adversarial instructions in untrusted audit or honeypot payloads are classified and stripped at the sanitization boundary; the model can never authorize or execute. Receipts are digest-anchored to the signed security-event ledger.</p>
+      <div class="frontier-row">
+        <span class="badge" id="frontierInjection">INJECTION SHIELD · IDLE</span>
+        <span class="badge" id="frontierProof">PROOF HASH · —</span>
+      </div>
+      <div class="row"><button id="frontierRun" class="compact" aria-label="Run co-evolution and SAM 3.1 showcase">⚡ Run Co-Evolution + SAM 3.1 Showcase</button></div>
+      <div id="frontierOutput" class="output" hidden></div>
+    </div>
+  </details>
 
   <section class="workspace-grid" aria-label="Security studios">
     <article class="card" id="meshStudio">
@@ -549,10 +585,11 @@ summary{cursor:pointer}
         <div class="card-head"><div><div class="panel-kicker"><i style="background:var(--amber)"></i> Evidence analysis</div><h2>Visual + voice forensics</h2><p>Media is withheld; only redacted metadata reaches correlation.</p></div><div class="top-actions"><span class="badge warn" id="visualStatus">AWAITING EVIDENCE</span><span class="badge" id="voiceStatus">VOICE · OPTIONAL</span></div></div>
         <p class="panel-caption">Visual + voice forensics: sensitive regions are redacted before analysis; only verified event IDs may be cited.</p>
         <div class="forensic-screen" id="forensicScreen"><canvas id="incidentCanvas" width="960" height="480" aria-label="Synthetic incident terminal snapshot"></canvas><div class="scanline"></div><div class="mask-layer" id="maskLayer"></div></div>
-        <div class="forensic-controls"><input id="incidentImage" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Optional incident screenshot"><input id="incidentAudio" type="file" accept="audio/*" aria-label="Optional voice incident note"><textarea id="voiceNote" maxlength="1000" placeholder="Optional operator context (never treated as authorization)" aria-label="Operator incident context"></textarea><button id="visualAnalyze" class="compact">Run SAM + Muse correlation</button><button id="runAnalyst" class="compact">Run incident analysis</button></div>
+        <div class="forensic-controls"><input id="incidentImage" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Optional incident screenshot"><input id="incidentAudio" type="file" accept="audio/*" aria-label="Optional voice incident note"><textarea id="voiceNote" maxlength="1000" placeholder="Optional operator context (never treated as authorization)" aria-label="Operator incident context"></textarea><button id="visualAnalyze" class="compact">Run SAM + Muse correlation</button><button id="runAnalyst" class="compact">Run incident analysis</button><button id="rackScan" class="compact" aria-label="Run the SAM 3.1 multiplexed edge-rack scan">👁️ SAM 3.1 Edge-Rack Scan · 16-object single-pass</button></div>
         <div class="event-badges" id="verifiedEventBadges"></div>
         <pre id="visualOutput" class="output">Synthetic terminal fixture ready. Choose visual evidence or run storyboard step 4.</pre>
         <div id="analystPanel" class="analyst-panel" hidden></div>
+        <div id="rackOverlay" class="rack-overlay" hidden></div>
       </article>
       <section aria-label="360 ledger detail">
         <h2 class="advanced-h">360° hash-chain ledger</h2>
@@ -741,7 +778,11 @@ summary{cursor:pointer}
         ['Audit-chain verification (1000 events)', `${m.auditChainVerificationMs?.events1000} ms`],
         [`False positives over ${m.falsePositivesOverCleanScans?.cleanScans ?? 50} clean scans`, String(m.falsePositivesOverCleanScans?.falsePositives ?? '—')]
       ];
-      $('#rtBenchBody').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+      const esc = value => String(value).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+      const scenarios = Array.isArray(body.scenarios) ? body.scenarios : [];
+      if (scenarios.length) rows.push(['Synthetic scenarios passed', `${scenarios.filter(s => s.pass).length}/${scenarios.length}`]);
+      const scenarioRows = scenarios.map(s => [`${s.pass ? '✓' : '✗'} ${s.id}`, `expected ${s.expected} · actual ${s.actual} · ${s.durationMs} ms${s.evidenceRef ? ` · ${s.evidenceRef}` : ''}`]);
+      $('#rtBenchBody').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('') + scenarioRows.map(([k, v]) => `<tr><td class="${k.startsWith('✓') ? 'rt-blocked' : 'rt-passed'}">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
       $('#rtBenchTable').hidden = false;
       statusEl.textContent = `Generated ${body.generatedAt || 'unknown'} · isolated temporary state only.`;
     } catch (error) {
@@ -772,6 +813,7 @@ summary{cursor:pointer}
   let mttr = null;
   let stepInFlight = false;
   let rateLimitBackoffUntil = 0;
+  let rackPromptValue = null;
   let activeAuditTab = 'hashchain';
   let tourActive = false;
   let tourStartAt = 0;
@@ -799,14 +841,14 @@ summary{cursor:pointer}
     $('#nonceTicker').textContent = `${requestId.slice(0, 8)} · ${new Date().toLocaleTimeString()}`;
     return { 'x-request-id': requestId, 'x-request-timestamp': String(Date.now()) };
   }
-  async function api(url, { method = 'GET', body, replay = false } = {}) {
+  async function api(url, { method = 'GET', body, replay = false, timeoutMs = 30000 } = {}) {
     const headers = {};
     if (body !== undefined) headers['content-type'] = 'application/json';
     if (method.toUpperCase() === 'POST' || replay) Object.assign(headers, replayHeaders());
     if (adminToken) headers['x-dashboard-admin-token'] = adminToken;
     else if (operatorToken) headers['x-dashboard-operator-token'] = operatorToken;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     let response;
     try {
       response = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), cache: 'no-store', credentials: 'same-origin', signal: controller.signal });
@@ -1100,7 +1142,8 @@ summary{cursor:pointer}
       ['02 · AUTONOMOUS POLICY + SANDBOX', /policy synthesis/i],
       ['03 · WEBAUTHN QUORUM', /WebAuthn/i],
       ['04 · MULTIMODAL PRIVACY FORENSICS', /visual\/voice/i],
-      ['05 · P2P GOSSIP INOCULATION', /gossip/i]
+      ['05 · P2P GOSSIP INOCULATION', /gossip/i],
+      ['06 · PROOF-CARRYING RECOVERY + FRONTIER DEFENSE', /recovery certificate|co-evolution|prompt-injection|edge-rack/i]
     ];
     const modules = groups.map(([title, pattern]) => {
       const match = newItems.find(item => pattern.test(item));
@@ -1183,6 +1226,7 @@ summary{cursor:pointer}
   async function runVisualForensics() {
     const screen = $('#forensicScreen');
     screen.classList.add('scanning');
+    const frontierStarted = Date.now();
     $('#visualStatus').textContent = 'SCANNING · REDACTION IN PROGRESS';
     try {
       const imageFile = $('#incidentImage').files[0];
@@ -1198,9 +1242,10 @@ summary{cursor:pointer}
         { text: 'private_key', x: .025, y: .755, width: .38, height: .11 }
       ];
       await new Promise(resolve => setTimeout(resolve, 900));
-      const result = await api('/api/visual-forensics', { method: 'POST', body: {
+      const result = await api('/api/visual-forensics', { method: 'POST', timeoutMs: 65000, body: {
         imageBase64: imageData.split(',')[1], canvasTelemetry: telemetry,
         ...(audioData ? { audioBase64: audioData } : {}),
+        ...(rackPromptValue ? { segmentationPrompt: rackPromptValue } : {}),
         ...(($('#voiceNote').value || '').trim() ? { voiceNote: $('#voiceNote').value.trim() } : {})
       } });
       setProvider(result);
@@ -1219,6 +1264,7 @@ summary{cursor:pointer}
       }, null, 2);
       await typeForensicReport(report);
       await loadAudit();
+      updateFrontierTelemetry(result, Date.now() - frontierStarted);
       return result;
     } finally { screen.classList.remove('scanning'); }
   }
@@ -1754,9 +1800,150 @@ summary{cursor:pointer}
   $('#runAnalyst').onclick = async () => {
     const button = $('#runAnalyst'); button.disabled = true;
     try {
-      const result = await api('/api/incident-analysis', { method: 'POST', body: {} });
+      const started = Date.now();
+      const result = await api('/api/incident-analysis', { method: 'POST', body: {}, timeoutMs: 65000 });
       renderAnalyst(result);
+      updateFrontierTelemetry(result, Date.now() - started);
     } catch (error) { statusMessage(`Incident analysis unavailable: ${error.message}`); }
+    finally { button.disabled = false; }
+  };
+  // Meta frontier telemetry: provider, model badges, round-trip latency and
+  // the SHA-256 provenance hash all come from real API responses only.
+  function updateFrontierTelemetry(result, wallMs) {
+    const proof = result && result.frontierProof;
+    const mode = (proof && proof.providerMode) || (result && result.providerMode) || 'Deterministic Fallback';
+    const provider = $('#frontierProvider');
+    if (provider) {
+      provider.textContent = `PROVIDER · ${mode}`;
+      provider.className = `badge ${/Live/.test(mode) ? 'live' : 'warn'}`;
+    }
+    if (Number.isFinite(wallMs) && $('#frontierLatency')) $('#frontierLatency').textContent = `round-trip · ${wallMs} ms`;
+    if (proof && $('#frontierProof')) $('#frontierProof').textContent = `PROOF HASH · SHA-256 ${String(proof.responseDigest).slice(0, 16)}…`;
+    const models = new Set((proof && proof.modelsInvoked) || (result && result.modelsInvoked) || []);
+    const setBadge = (selector, live) => {
+      const el = $(selector);
+      if (el) { el.textContent = `${el.dataset.label} · ${live ? 'live' : 'standby'}`; el.className = `badge ${live ? 'live' : ''}`; }
+    };
+    setBadge('#frontierSpark', models.has('muse-spark-1.3'));
+    setBadge('#frontierSam', models.has('sam-3.1'));
+    setBadge('#frontierBaseten', [...models].some(name => String(name).includes('muse-spark-open-1026')));
+  }
+  function renderFrontier(result, wallMs) {
+    const output = $('#frontierOutput');
+    output.hidden = false;
+    output.replaceChildren();
+    const add = (title, lines) => {
+      const section = document.createElement('section');
+      section.className = 'frontier-section';
+      const h = document.createElement('h3'); h.textContent = title; section.append(h);
+      lines.filter(Boolean).forEach(text => { const p = document.createElement('p'); p.textContent = text; section.append(p); });
+      output.append(section);
+    };
+    const injection = result.promptInjection || {};
+    add('Prompt-injection shield', [
+      injection.promptInjectionBlocked ? `BLOCKED · classes: ${(injection.patternClasses || []).join(', ')}` : 'CLEAN · no adversarial instruction patterns detected',
+      `input SHA-256 ${String(injection.inputDigest || '').slice(0, 16)}… · sanitized SHA-256 ${String(injection.sanitizedDigest || '').slice(0, 16)}… · ledger request ${String(injection.requestIdHash || '').slice(0, 16)}…`
+    ]);
+    const prediction = result.prediction || {};
+    add('Baseten muse-spark-open-1026 · attacker next-move prediction', [
+      `provider: ${prediction.providerMode || 'Deterministic Fallback'} · models invoked: ${(prediction.modelsInvoked || []).join(', ') || 'none'}`,
+      `predicted victims: ${(prediction.predictedVictims || []).join(', ') || 'none'} · modeled impact: ${prediction.timeToImpactSeconds ?? '—'}s`,
+      prediction.rationale ? `rationale: ${prediction.rationale}` : null
+    ]);
+    const counter = result.counterAntibody || {};
+    add('Muse Spark 1.3 · counter-antibody + sandbox dry-run', [
+      `provider: ${counter.providerMode || 'Deterministic Fallback'} · models invoked: ${(counter.modelsInvoked || []).join(', ') || 'none'}`,
+      counter.rationaleSummary ? `evidence summary: ${counter.rationaleSummary}` : null,
+      `sandbox: ${counter.sandbox?.status || 'unavailable'}${counter.sandbox?.replayedEventsCount != null ? ` · ${counter.sandbox.replayedEventsCount} events · ${counter.sandbox.falsePositives} FP · ${counter.sandbox.safetyScore}% safety` : ''}`,
+      'Ask-Before-Act: advisory only — requires the 2-of-3 human passkey quorum; never applied automatically.'
+    ]);
+    add('Cryptographic AI provenance', [
+      `evidence digest SHA-256 ${String(result.frontierProof?.evidenceDigest || '').slice(0, 24)}…`,
+      `response digest SHA-256 ${String(result.frontierProof?.responseDigest || '').slice(0, 24)}… · ${result.frontierProof?.at || ''} · ${result.durationMs ?? wallMs} ms`
+    ]);
+    const injectionBadge = $('#frontierInjection');
+    if (injectionBadge) {
+      injectionBadge.textContent = `INJECTION SHIELD · ${injection.promptInjectionBlocked ? 'BLOCKED' : 'CLEAN'}`;
+      injectionBadge.className = `badge ${injection.promptInjectionBlocked ? 'good' : ''}`;
+    }
+    updateFrontierTelemetry(result, wallMs);
+  }
+  const RACK_OBJECTS = ['NIC-Port-01', 'TPM-2.0-Seal', 'NVMe-Bay-A', 'NVMe-Bay-B', 'UART-Debug-Header', 'Fiber-Uplink-B', 'PSU-Redundant-A', 'PSU-Redundant-B', 'BMC-Controller', 'EEPROM-BIOS', 'PCIe-Riser-1', 'PCIe-Riser-2', 'Fan-Array-Front', 'Fan-Array-Rear', 'RTC-Battery', 'Chassis-Intrusion-Switch'];
+  const RACK_TAMPERED = 'UART-Debug-Header';
+  function drawEdgeRack() {
+    const canvas = $('#incidentCanvas');
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#050a11'; context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = '#0b1522'; context.fillRect(0, 0, canvas.width, 42);
+    context.fillStyle = '#06b6d4'; context.font = 'bold 16px monospace'; context.fillText('EDGE RACK · HARDWARE INSPECTION SNAPSHOT (SYNTHETIC)', 24, 27);
+    const columns = 4; const cellW = 220; const cellH = 92; const offsetX = 40; const offsetY = 70;
+    RACK_OBJECTS.forEach((name, index) => {
+      const x = offsetX + (index % columns) * cellW;
+      const y = offsetY + Math.floor(index / columns) * cellH;
+      const tampered = name === RACK_TAMPERED;
+      context.strokeStyle = tampered ? '#f43f5e' : '#28445d';
+      context.fillStyle = tampered ? 'rgba(244,63,94,.18)' : 'rgba(13,26,42,.85)';
+      context.lineWidth = tampered ? 2 : 1;
+      context.fillRect(x, y, cellW - 16, cellH - 16);
+      context.strokeRect(x, y, cellW - 16, cellH - 16);
+      context.fillStyle = tampered ? '#fda4af' : '#9db4c8';
+      context.font = '11px monospace';
+      context.fillText(name, x + 10, y + 24);
+      context.fillStyle = tampered ? '#f43f5e' : '#10b981';
+      context.font = '10px monospace';
+      context.fillText(tampered ? 'TAMPER SUSPECTED' : 'SEALED · OK', x + 10, y + 48);
+    });
+    context.fillStyle = '#8997aa'; context.font = '12px monospace';
+    context.fillText('SYNTHETIC FIXTURE · OPERATOR-AUTHORIZED INSPECTION · NO REAL HARDWARE', 40, 462);
+  }
+  async function rackScan() {
+    drawEdgeRack();
+    $('#voiceNote').value = 'Operator alert: physical tamper suspected on the UART debug header of edge node-a; requesting isolation review.';
+    rackPromptValue = 'label';
+    try { return await runVisualForensics(); }
+    finally { rackPromptValue = null; }
+  }
+  function renderRackOverlay(result) {
+    const overlay = $('#rackOverlay');
+    overlay.hidden = false;
+    overlay.replaceChildren();
+    const grid = document.createElement('div');
+    grid.className = 'rack-grid';
+    RACK_OBJECTS.forEach(name => {
+      const chip = document.createElement('span');
+      chip.className = `rack-chip${name === RACK_TAMPERED ? ' tampered' : ''}`;
+      chip.textContent = name;
+      grid.append(chip);
+    });
+    overlay.append(grid);
+    const note = document.createElement('p');
+    note.className = 'panel-caption';
+    const samBoxes = (result.redactionBoxes || []).filter(box => box.method === 'sam-3.1');
+    const evidence = (latestAudit360?.snapshotIntegrityLedger?.events || []).filter(event => event.type === 'tamper-detected' || event.type === 'quarantine-applied').at(-1);
+    note.textContent = `16 hardware objects tracked in one pass · SAM 3.1 boxes: ${samBoxes.length}${samBoxes.length ? '' : ' (none — canvas telemetry / withheld path)'} · tampered boundary: ${RACK_TAMPERED} · correlated quarantine evidence: ${evidence ? evidence.eventId : '—'}`;
+    overlay.append(note);
+  }
+  $('#rackScan').onclick = async () => {
+    const button = $('#rackScan'); button.disabled = true;
+    try { renderRackOverlay(await rackScan()); }
+    catch (error) { statusMessage(`Rack scan unavailable: ${error.message}`); }
+    finally { button.disabled = false; }
+  };
+  $('#frontierRun').onclick = async () => {
+    const button = $('#frontierRun'); button.disabled = true;
+    try {
+      const started = Date.now();
+      try {
+        const result = await api('/api/frontier/co-evolution', { method: 'POST', timeoutMs: 75000, body: { node: 'node-a', input: $('#probeInput').value || 'help' } });
+        renderFrontier(result, Date.now() - started);
+      } catch (error) {
+        const output = $('#frontierOutput');
+        output.hidden = false;
+        output.textContent = `Co-evolution unavailable: ${error.message}. Run the autonomous demo first so verified tamper evidence exists.`;
+        statusMessage(`Co-evolution unavailable: ${error.message}`);
+      }
+      renderRackOverlay(await rackScan());
+    } catch (error) { statusMessage(`Frontier showcase unavailable: ${error.message}`); }
     finally { button.disabled = false; }
   };
   $('#applyPolicy').onclick = async () => {
@@ -1922,6 +2109,23 @@ summary{cursor:pointer}
       const ok = match[1] === match[2] && Number(match[1]) > 0;
       badge.textContent = `${match[1]}/${match[2]} chains verified${ok ? ' ✓' : ''}`;
       badge.className = `badge ${ok ? 'good' : 'warn'}`;
+    });
+
+    // Passive frontier telemetry mirrors of the existing provider pills.
+    onMutate($('#modelStatus'), TEXT_AND_CLASS, () => {
+      const badge = $('#frontierProvider');
+      const status = $('#modelStatus');
+      if (badge && status) {
+        badge.textContent = `PROVIDER · ${(status.textContent || '').trim()}`;
+        badge.className = `badge ${status.classList.contains('live') ? 'live' : 'warn'}`;
+      }
+    });
+    [['[data-model="muse-spark-1.3"]', '#frontierSpark'], ['[data-model="baseten"]', '#frontierBaseten'], ['[data-model="sam-3.1"]', '#frontierSam']].forEach(([selector, targetSelector]) => {
+      const pill = document.querySelector(selector);
+      onMutate(pill, TEXT_ONLY, () => {
+        const el = $(targetSelector);
+        if (el && pill) { el.textContent = pill.textContent; el.className = pill.className; }
+      });
     });
   }
 

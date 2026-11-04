@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { SecurityNode, createAuthorities, authorityTrust } = require('../src/core');
-const { API_URL, BASETEN_API_URL, HONEYPOT_BASETEN_MODEL, boundedEvidence, calculateShannonEntropy, simulateSIR, createIncidentAnalyst } = require('../src/ai-analyst');
+const { API_URL, BASETEN_API_URL, HONEYPOT_BASETEN_MODEL, boundedEvidence, parseSamBoxes, calculateShannonEntropy, simulateSIR, createIncidentAnalyst } = require('../src/ai-analyst');
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'danms-analyst-'));
@@ -299,4 +299,74 @@ test('pre-cog prediction supplies exact SIR metrics, bounds victims, and treats 
   const safeResult = await unsafePatch.predictThreat({ entropyScore: 7.9, nodes: ['node-a', 'node-b'], sourceNode: 'node-a' });
   assert.equal(safeResult.providerMode, 'Deterministic Fallback');
   assert.doesNotMatch(safeResult.patchCode, /child_process/);
+});
+
+const SAM_GRAMMAR = '<0f>0<|box;x1=331;y1=71;x2=509;y2=249;w=640;h=320|><|mask;x=0;y=0;data=179,179,~|>,1<|box;x1=10;y1=20;x2=110;y2=60;w=640;h=320|><|mask;x=0;y=0;data=1,2,~|>';
+
+test('SAM 3.1 parser normalizes documented special-token boxes and rejects out-of-bounds geometry', () => {
+  const boxes = parseSamBoxes(SAM_GRAMMAR);
+  assert.equal(boxes.length, 2);
+  assert.deepEqual(boxes[0], { label: 'sensitive', box: [0.517188, 0.221875, 0.278125, 0.55625] });
+  assert.deepEqual(parseSamBoxes('<0f>0<|box;x1=600;y1=10;x2=700;y2=60;w=640;h=320|>'), []);
+  assert.deepEqual(parseSamBoxes('<0f>0<|box;x1=50;y1=10;x2=40;y2=60;w=640;h=320|>'), []);
+  assert.deepEqual(parseSamBoxes(''), []);
+  assert.deepEqual(parseSamBoxes(undefined), []);
+});
+
+test('Meta SAM 3.1 uses the documented Responses contract and reports Meta provenance only after real boxes', async () => {
+  const calls = [];
+  const analyst = createIncidentAnalyst({
+    apiKey: 'test-meta-key', basetenApiKey: '',
+    fetchImpl: async (url, options) => {
+      calls.push({ url, request: JSON.parse(options.body), authorization: options.headers.authorization });
+      return new Response(JSON.stringify({ output: [{ type: 'message', content: [{ type: 'output_text', text: SAM_GRAMMAR }] }] }), { status: 200 });
+    }
+  });
+  const result = await analyst.visualProviders({ imageBase64: Buffer.from('small-image').toString('base64') });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, API_URL);
+  assert.equal(calls[0].request.model, 'sam-3.1');
+  assert.deepEqual(calls[0].request.input[0].content.map(part => part.type), ['input_text', 'input_image']);
+  assert.equal(calls[0].request.input[0].content[0].text, 'text');
+  assert.match(calls[0].request.input[0].content[1].image_url, /^data:image\/png;base64,/);
+  assert.equal(result.providerMode, 'Live Meta Model API');
+  assert.deepEqual(result.modelsInvoked, ['sam-3.1']);
+  assert.equal(result.redactionBoxes.length, 2);
+
+  const custom = await createIncidentAnalyst({
+    apiKey: 'test-meta-key', basetenApiKey: '',
+    fetchImpl: async (_url, options) => { calls.push({ request: JSON.parse(options.body) }); return new Response(JSON.stringify({ output_text: SAM_GRAMMAR }), { status: 200 }); }
+  }).visualProviders({ imageBase64: Buffer.from('small-image').toString('base64'), segmentationPrompt: 'yellow school bus' });
+  assert.equal(calls.at(-1).request.input[0].content[0].text, 'yellow school bus');
+  assert.deepEqual(custom.modelsInvoked, ['sam-3.1']);
+});
+
+test('SAM 3.1 never reports a live model for failed, empty, or malformed responses', async () => {
+  const image = Buffer.from('small-image').toString('base64');
+  for (const respond of [
+    () => new Response('{}', { status: 404 }),
+    () => new Response(JSON.stringify({ output_text: '' }), { status: 200 }),
+    () => new Response('not json', { status: 200 }),
+    () => { throw new Error('network-down'); }
+  ]) {
+    const result = await createIncidentAnalyst({ apiKey: 'test-meta-key', basetenApiKey: '', fetchImpl: async () => respond() }).visualProviders({ imageBase64: image });
+    assert.equal(result.providerMode, 'Deterministic Fallback');
+    assert.deepEqual(result.modelsInvoked, []);
+    assert.deepEqual(result.redactionBoxes, []);
+  }
+});
+
+test('a configured Meta key takes Spark analysis even when a Baseten key is also configured', async t => {
+  const source = fixture(t);
+  const ref = boundedEvidence(source.statuses, source.reports).nodes[0].events.at(-1).id;
+  const calls = [];
+  const analyst = createIncidentAnalyst({
+    apiKey: 'test-meta-key', basetenApiKey: 'test-baseten-key',
+    fetchImpl: async (url, options) => { calls.push({ url, model: JSON.parse(options.body).model }); return apiResponse(analysisFor(ref)); }
+  });
+  const result = await analyst.analyze(source);
+  assert.equal(calls[0].url, API_URL);
+  assert.equal(calls[0].model, 'muse-spark-1.3');
+  assert.equal(result.providerMode, 'Live Meta Model API');
+  assert.deepEqual(result.modelsInvoked, ['muse-spark-1.3']);
 });

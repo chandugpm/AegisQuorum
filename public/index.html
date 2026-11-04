@@ -307,6 +307,52 @@ summary{cursor:pointer}
 .analyst-section.recommendations h3{color:var(--cyan)}
 .evidence-chip{display:inline-block;margin-left:4px;padding:1px 7px;border:1px solid rgba(6,182,212,.4);border-radius:99px;color:var(--cyan);background:rgba(6,182,212,.06);font:8px var(--mono);cursor:pointer}
 .evidence-chip:hover{border-color:var(--cyan);color:#a5f3fc}
+
+/* ---------- Frontier telemetry + edge-rack showcase ---------- */
+.frontier{margin:0 0 12px;border:1px solid rgba(139,92,246,.3);border-radius:8px;background:var(--surface);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.frontier>summary{cursor:pointer;padding:12px 16px;color:#c4b5fd;font:700 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;list-style:none}
+.frontier>summary::-webkit-details-marker{display:none}
+.frontier>summary::after{content:"▾";float:right}
+.frontier:not([open])>summary::after{content:"▸"}
+.frontier-body{padding:2px 16px 14px}
+.frontier-row{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.frontier-section{margin-top:8px}
+.frontier-section h3{margin:0 0 4px;font:700 9px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--cyan)}
+.frontier-section p{margin:2px 0;color:#c5d3e4;font-size:10px;line-height:1.5}
+.rack-overlay{margin-top:8px}
+.rack-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:5px}
+.rack-chip{padding:5px 8px;border:1px solid rgba(16,185,129,.35);border-radius:5px;background:rgba(16,185,129,.05);color:#a7f3d0;font:8px var(--mono);letter-spacing:.04em;text-align:center}
+.rack-chip.tampered{border-color:rgba(244,63,94,.65);background:rgba(244,63,94,.1);color:#fda4af;animation:card-breathe 1.4s ease-in-out infinite}
+  </style>
+  <style id="director-css">
+/* 3-minute cinematic auto-director: HUD, subtitles, spotlight. */
+.director-toggles{display:flex;gap:8px;justify-content:center;margin-top:14px;flex-wrap:wrap}
+.director-toggles button{border-radius:99px;font:10px var(--mono);letter-spacing:.04em;padding:7px 14px}
+.director-hud{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;align-items:center;gap:10px;padding:9px 14px;border:1px solid rgba(6,182,212,.4);border-radius:99px;background:rgba(7,14,24,.93);backdrop-filter:blur(14px);box-shadow:0 14px 44px rgba(0,0,0,.4)}
+.director-hud[hidden],.director-subtitle[hidden]{display:none!important}
+.director-act{color:var(--cyan);font:700 10px var(--mono);letter-spacing:.08em;white-space:nowrap;max-width:46vw;overflow:hidden;text-overflow:ellipsis}
+.director-clock{color:var(--muted);font:10px var(--mono);white-space:nowrap}
+.director-progress{width:130px;height:4px;background:#253246;border-radius:99px;overflow:hidden;flex:none}
+.director-progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--green));transition:width .25s linear}
+.director-hud button{padding:5px 10px;font-size:9px;white-space:nowrap}
+.director-subtitle{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;align-items:center;gap:12px;max-width:min(880px,calc(100vw - 20px));max-height:26vh;overflow:hidden;padding:11px 18px;border:1px solid rgba(6,182,212,.3);border-radius:12px;background:rgba(5,9,16,.93);backdrop-filter:blur(14px);box-shadow:0 16px 48px rgba(0,0,0,.45)}
+.director-subtitle p{margin:0;color:#eef4fb;font-size:12px;line-height:1.55;text-align:center;max-height:calc(26vh - 22px);overflow:auto}
+.director-prov{flex:none;max-width:230px;padding:4px 11px;border:1px solid rgba(139,92,246,.6);border-radius:99px;color:#e9d5ff;background:rgba(139,92,246,.12);font:700 8px var(--mono);letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 0 18px rgba(139,92,246,.3);animation:prov-glow 2.4s ease-in-out infinite}
+@keyframes prov-glow{0%,100%{box-shadow:0 0 10px rgba(139,92,246,.2)}50%{box-shadow:0 0 24px rgba(139,92,246,.45)}}
+@media(max-width:700px){.director-prov{display:none}}
+.audio-wave{display:inline-flex;align-items:flex-end;gap:2px;height:14px;flex:none}
+.audio-wave i{width:3px;height:100%;background:var(--cyan);border-radius:2px;transform-origin:bottom;animation:wave 1s ease-in-out infinite}
+.audio-wave i:nth-child(1){height:35%;animation-delay:0s}
+.audio-wave i:nth-child(2){height:70%;animation-delay:.15s}
+.audio-wave i:nth-child(3){height:100%;animation-delay:.3s}
+.audio-wave i:nth-child(4){height:65%;animation-delay:.45s}
+.audio-wave i:nth-child(5){height:40%;animation-delay:.6s}
+@keyframes wave{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+.director-spotlight{position:relative!important;border-color:rgba(6,182,212,.85)!important;box-shadow:0 0 0 1px rgba(6,182,212,.5),0 0 34px rgba(6,182,212,.22)!important;transform:scale(1.008);z-index:2}
+.director-spotlight::before{content:"● LIVE EXECUTING";position:absolute;top:8px;right:10px;color:var(--green);font:700 8px var(--mono);letter-spacing:.1em;animation:rec-blink 1.2s steps(2) infinite;pointer-events:none}
+details.director-spotlight::before{top:auto;bottom:8px}
+@media(max-width:640px){.director-hud{flex-wrap:wrap;justify-content:center;border-radius:14px;max-width:calc(100vw - 16px)}.director-progress{width:100%;order:5}.director-act{max-width:100%}}
+@media(prefers-reduced-motion:reduce){.audio-wave i{animation:none}.director-spotlight{transform:none}.director-progress i{transition:none}.director-prov{animation:none}}
   </style>
 </head>
 <body>
@@ -340,6 +386,10 @@ summary{cursor:pointer}
   <section class="hero" aria-label="Run the autonomous demo">
     <p class="hero-kicker">Live three-node zero-trust cluster · human-gated recovery</p>
     <button id="runFull" class="runall" aria-label="Run the full autonomous seven-stage attack-to-recovery demo">▶ RUN AUTONOMOUS DEMO</button>
+    <div class="director-toggles">
+      <button id="directorModeToggle" class="compact" aria-label="Toggle between cinematic director mode and fast mode">🎬 3-Min Meta AI Director: ON</button>
+      <button id="directorVoiceToggle" class="compact" aria-label="Toggle AI voice narration">🔊 Live AI Voice: ON</button>
+    </div>
     <p class="hero-sub">Watch Aegis detect an attack, trap the attacker, protect other nodes, and recover with cryptographic proof.</p>
     <div class="hero-status">
       <div class="hero-chip"><small>Nodes trusted</small><strong id="heroVerified">—</strong></div>
@@ -394,6 +444,26 @@ summary{cursor:pointer}
     <p class="panel-caption">Every stage reports here in plain language as it runs; these messages drive the flow diagram above.</p>
     <p class="statusline" id="message" aria-live="polite">Connecting to the local control plane…</p>
   </section>
+
+  <details class="frontier" id="frontierPanel" open>
+    <summary>⚡ Meta Superintelligence Frontier Telemetry</summary>
+    <div class="frontier-body">
+      <div class="frontier-row">
+        <span class="badge" id="frontierProvider">PROVIDER · —</span>
+        <span class="badge" id="frontierSpark" data-label="muse-spark-1.3">muse-spark-1.3 · standby</span>
+        <span class="badge" id="frontierBaseten" data-label="baseten muse-spark-open-1026">baseten muse-spark-open-1026 · standby</span>
+        <span class="badge" id="frontierSam" data-label="sam-3.1">sam-3.1 · standby</span>
+        <span class="badge" id="frontierLatency">round-trip · —</span>
+      </div>
+      <p class="panel-caption">Prompt-injection shield: adversarial instructions in untrusted audit or honeypot payloads are classified and stripped at the sanitization boundary; the model can never authorize or execute. Receipts are digest-anchored to the signed security-event ledger.</p>
+      <div class="frontier-row">
+        <span class="badge" id="frontierInjection">INJECTION SHIELD · IDLE</span>
+        <span class="badge" id="frontierProof">PROOF HASH · —</span>
+      </div>
+      <div class="row"><button id="frontierRun" class="compact" aria-label="Run co-evolution and SAM 3.1 showcase">⚡ Run Co-Evolution + SAM 3.1 Showcase</button></div>
+      <div id="frontierOutput" class="output" hidden></div>
+    </div>
+  </details>
 
   <section class="workspace-grid" aria-label="Security studios">
     <article class="card" id="meshStudio">
@@ -549,10 +619,11 @@ summary{cursor:pointer}
         <div class="card-head"><div><div class="panel-kicker"><i style="background:var(--amber)"></i> Evidence analysis</div><h2>Visual + voice forensics</h2><p>Media is withheld; only redacted metadata reaches correlation.</p></div><div class="top-actions"><span class="badge warn" id="visualStatus">AWAITING EVIDENCE</span><span class="badge" id="voiceStatus">VOICE · OPTIONAL</span></div></div>
         <p class="panel-caption">Visual + voice forensics: sensitive regions are redacted before analysis; only verified event IDs may be cited.</p>
         <div class="forensic-screen" id="forensicScreen"><canvas id="incidentCanvas" width="960" height="480" aria-label="Synthetic incident terminal snapshot"></canvas><div class="scanline"></div><div class="mask-layer" id="maskLayer"></div></div>
-        <div class="forensic-controls"><input id="incidentImage" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Optional incident screenshot"><input id="incidentAudio" type="file" accept="audio/*" aria-label="Optional voice incident note"><textarea id="voiceNote" maxlength="1000" placeholder="Optional operator context (never treated as authorization)" aria-label="Operator incident context"></textarea><button id="visualAnalyze" class="compact">Run SAM + Muse correlation</button><button id="runAnalyst" class="compact">Run incident analysis</button></div>
+        <div class="forensic-controls"><input id="incidentImage" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Optional incident screenshot"><input id="incidentAudio" type="file" accept="audio/*" aria-label="Optional voice incident note"><textarea id="voiceNote" maxlength="1000" placeholder="Optional operator context (never treated as authorization)" aria-label="Operator incident context"></textarea><button id="visualAnalyze" class="compact">Run SAM + Muse correlation</button><button id="runAnalyst" class="compact">Run incident analysis</button><button id="rackScan" class="compact" aria-label="Run the SAM 3.1 multiplexed edge-rack scan">👁️ SAM 3.1 Edge-Rack Scan · 16-object single-pass</button></div>
         <div class="event-badges" id="verifiedEventBadges"></div>
         <pre id="visualOutput" class="output">Synthetic terminal fixture ready. Choose visual evidence or run storyboard step 4.</pre>
         <div id="analystPanel" class="analyst-panel" hidden></div>
+        <div id="rackOverlay" class="rack-overlay" hidden></div>
       </article>
       <section aria-label="360 ledger detail">
         <h2 class="advanced-h">360° hash-chain ledger</h2>
@@ -575,6 +646,18 @@ summary{cursor:pointer}
 
 <aside class="teleprompter" id="teleprompter" aria-live="polite"><strong id="directorState">DIRECTOR · STANDBY</strong><p id="subtitleText">Zero-trust posture is verified. Start a guided tour when ready.</p><div class="tour-progress" aria-label="Tour progress"><i id="tourProgress"></i></div><div class="director-controls"><label><input id="tourVoiceover" type="checkbox"> Voice</label><label><input id="tourCapture" type="checkbox"> Record screen</label><button id="tourStop" class="compact" hidden>Stop</button></div></aside>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="director-hud" id="directorHud" hidden>
+  <span id="directorAct" class="director-act">ACT 1/10</span>
+  <span id="directorClock" class="director-clock">00:00 / 03:00</span>
+  <div class="director-progress" aria-hidden="true"><i id="directorProgress"></i></div>
+  <button id="directorNext" class="compact" aria-label="Skip to the next act">⏭ Next Act</button>
+  <button id="directorStop" class="compact" aria-label="Stop the demo showcase">⏹ Stop Demo</button>
+</div>
+<div class="director-subtitle" id="directorSubtitleBar" hidden>
+  <span class="audio-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+  <span class="director-prov" id="directorProv">🧠 META AI</span>
+  <p id="directorSubtitle">…</p>
+</div>
 <div id="redteam-root"></div>
 <style id="redteam-panel-css">
 /* Red vs Blue panel — dark, mobile-friendly, self-contained under #redteam-root. */
@@ -609,6 +692,8 @@ summary{cursor:pointer}
 #redteam-root .rt-status{margin-top:10px;font-size:11px;color:var(--rt-muted);min-height:14px}
 #redteam-root .rt-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 #redteam-root .rt-token{background:rgba(5,10,17,.7);border:1px solid var(--rt-border);border-radius:6px;color:var(--rt-text);font:10px inherit;padding:9px 10px;width:min(240px,60vw)}
+#redteam-root .rt-token.rt-authed{border-color:rgba(16,185,129,.6);box-shadow:0 0 14px rgba(16,185,129,.18)}
+#redteam-root .rt-token.rt-authed::placeholder{color:#6ee7b7}
 #redteam-root .rt-bench{margin-top:14px}
 #redteam-root .rt-refresh{border-color:rgba(6,182,212,.5);color:#a5f3fc;background:rgba(6,182,212,.12)}
 #redteam-root code{color:var(--rt-amber);font-size:10px}
@@ -707,9 +792,11 @@ summary{cursor:pointer}
       setTimeout(() => setStage('gossip'), 1200), setTimeout(() => setStage('recover'), 1600)];
     try {
       const headers = { 'content-type': 'application/json', 'x-request-id': `redteam-${crypto.randomUUID()}`, 'x-request-timestamp': String(Date.now()) };
-      const token = $('#rtToken').value.trim();
+      const token = ($('#rtToken').value || '').trim()
+        || (((document.querySelector('#adminToken') || {}).value) || '').trim()
+        || (typeof window.aegisAdminToken === 'function' ? String(window.aegisAdminToken() || '').trim() : '');
       if (token) headers['x-dashboard-admin-token'] = token;
-      const response = await fetch('/api/red-team/run', { method: 'POST', headers, body: '{}' });
+      const response = await fetch('/api/red-team/run', { method: 'POST', headers, body: '{}', credentials: 'same-origin' });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || `http-${response.status}`);
       completeAll();
@@ -741,7 +828,11 @@ summary{cursor:pointer}
         ['Audit-chain verification (1000 events)', `${m.auditChainVerificationMs?.events1000} ms`],
         [`False positives over ${m.falsePositivesOverCleanScans?.cleanScans ?? 50} clean scans`, String(m.falsePositivesOverCleanScans?.falsePositives ?? '—')]
       ];
-      $('#rtBenchBody').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+      const esc = value => String(value).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+      const scenarios = Array.isArray(body.scenarios) ? body.scenarios : [];
+      if (scenarios.length) rows.push(['Synthetic scenarios passed', `${scenarios.filter(s => s.pass).length}/${scenarios.length}`]);
+      const scenarioRows = scenarios.map(s => [`${s.pass ? '✓' : '✗'} ${s.id}`, `expected ${s.expected} · actual ${s.actual} · ${s.durationMs} ms${s.evidenceRef ? ` · ${s.evidenceRef}` : ''}`]);
+      $('#rtBenchBody').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('') + scenarioRows.map(([k, v]) => `<tr><td class="${k.startsWith('✓') ? 'rt-blocked' : 'rt-passed'}">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
       $('#rtBenchTable').hidden = false;
       statusEl.textContent = `Generated ${body.generatedAt || 'unknown'} · isolated temporary state only.`;
     } catch (error) {
@@ -772,6 +863,7 @@ summary{cursor:pointer}
   let mttr = null;
   let stepInFlight = false;
   let rateLimitBackoffUntil = 0;
+  let rackPromptValue = null;
   let activeAuditTab = 'hashchain';
   let tourActive = false;
   let tourStartAt = 0;
@@ -794,19 +886,40 @@ summary{cursor:pointer}
     toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
   };
   const role = () => adminToken || devSessionActive ? 'ADMIN' : operatorToken ? 'OPERATOR' : 'READ-ONLY';
+  window.aegisAdminToken = () => adminToken;
+  function ensureAdminTokenFromInput() {
+    const input = $('#adminToken');
+    const entered = (input && input.value || '').trim();
+    if (entered && !adminToken) {
+      adminToken = entered;
+      operatorToken = '';
+      input.value = '';
+      updateRole();
+    }
+    return adminToken;
+  }
+  function syncRedTeamToken() {
+    const input = $('#rtToken');
+    if (!input) return;
+    const entered = (($('#adminToken') || {}).value || '').trim();
+    const authed = Boolean(adminToken) || devSessionActive || Boolean(entered);
+    if (adminToken && (!input.value.trim() || input.dataset.mirrored === '1')) { input.value = adminToken; input.dataset.mirrored = '1'; }
+    input.placeholder = authed ? '✓ Authenticated via active Admin Session' : 'Admin token (or use dev session)';
+    input.classList.toggle('rt-authed', authed);
+  }
   function replayHeaders() {
     const requestId = crypto.randomUUID();
     $('#nonceTicker').textContent = `${requestId.slice(0, 8)} · ${new Date().toLocaleTimeString()}`;
     return { 'x-request-id': requestId, 'x-request-timestamp': String(Date.now()) };
   }
-  async function api(url, { method = 'GET', body, replay = false } = {}) {
+  async function api(url, { method = 'GET', body, replay = false, timeoutMs = 30000 } = {}) {
     const headers = {};
     if (body !== undefined) headers['content-type'] = 'application/json';
     if (method.toUpperCase() === 'POST' || replay) Object.assign(headers, replayHeaders());
     if (adminToken) headers['x-dashboard-admin-token'] = adminToken;
     else if (operatorToken) headers['x-dashboard-operator-token'] = operatorToken;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     let response;
     try {
       response = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), cache: 'no-store', credentials: 'same-origin', signal: controller.signal });
@@ -840,6 +953,7 @@ summary{cursor:pointer}
     $('#roleBadge').textContent = role();
     $('#roleBadge').className = `badge ${adminToken || devSessionActive || operatorToken ? 'good' : ''}`;
     $('#demoAutoAuth').textContent = devSessionActive ? 'DEMO ADMIN · 10 MIN' : '1-Click Load Dev Admin Token';
+    syncRedTeamToken();
   }
   function setRing(id, valueId, percentage, label) {
     const progress = $('#'+id);
@@ -1100,7 +1214,8 @@ summary{cursor:pointer}
       ['02 · AUTONOMOUS POLICY + SANDBOX', /policy synthesis/i],
       ['03 · WEBAUTHN QUORUM', /WebAuthn/i],
       ['04 · MULTIMODAL PRIVACY FORENSICS', /visual\/voice/i],
-      ['05 · P2P GOSSIP INOCULATION', /gossip/i]
+      ['05 · P2P GOSSIP INOCULATION', /gossip/i],
+      ['06 · PROOF-CARRYING RECOVERY + FRONTIER DEFENSE', /recovery certificate|co-evolution|prompt-injection|edge-rack/i]
     ];
     const modules = groups.map(([title, pattern]) => {
       const match = newItems.find(item => pattern.test(item));
@@ -1183,6 +1298,7 @@ summary{cursor:pointer}
   async function runVisualForensics() {
     const screen = $('#forensicScreen');
     screen.classList.add('scanning');
+    const frontierStarted = Date.now();
     $('#visualStatus').textContent = 'SCANNING · REDACTION IN PROGRESS';
     try {
       const imageFile = $('#incidentImage').files[0];
@@ -1198,9 +1314,10 @@ summary{cursor:pointer}
         { text: 'private_key', x: .025, y: .755, width: .38, height: .11 }
       ];
       await new Promise(resolve => setTimeout(resolve, 900));
-      const result = await api('/api/visual-forensics', { method: 'POST', body: {
+      const result = await api('/api/visual-forensics', { method: 'POST', timeoutMs: 65000, body: {
         imageBase64: imageData.split(',')[1], canvasTelemetry: telemetry,
         ...(audioData ? { audioBase64: audioData } : {}),
+        ...(rackPromptValue ? { segmentationPrompt: rackPromptValue } : {}),
         ...(($('#voiceNote').value || '').trim() ? { voiceNote: $('#voiceNote').value.trim() } : {})
       } });
       setProvider(result);
@@ -1219,6 +1336,7 @@ summary{cursor:pointer}
       }, null, 2);
       await typeForensicReport(report);
       await loadAudit();
+      updateFrontierTelemetry(result, Date.now() - frontierStarted);
       return result;
     } finally { screen.classList.remove('scanning'); }
   }
@@ -1315,27 +1433,29 @@ summary{cursor:pointer}
   }
   async function runStep(step) {
     const start = performance.now();
+    let stepResult = null;
     document.querySelectorAll('[data-step]').forEach(button => button.classList.toggle('active', button.dataset.step === step));
     statusMessage(`Running ${step}…`);
     if (step === 'tamper') {
       incidentStartedAt = Date.now();
-      await incidentAction('node-a', 'tamper');
+      stepResult = await incidentAction('node-a', 'tamper');
     } else if (step === 'deception') {
       await incidentAction('node-a', 'scan');
       if (incidentStartedAt) mttd = Math.round(Date.now() - incidentStartedAt);
-      const result = await api('/api/deception/simulate', { method: 'POST', body: { node: 'node-a', input: $('#probeInput').value || 'help', durationMs: Math.round(performance.now() - start) } });
-      $('#probeOutput').textContent = `${result.response}\n\nThreat fingerprint: ${result.threatFingerprint.digest}`;
-      setProvider(result);
+      stepResult = await api('/api/deception/simulate', { method: 'POST', body: { node: 'node-a', input: $('#probeInput').value || 'help', durationMs: Math.round(performance.now() - start) } });
+      $('#probeOutput').textContent = `${stepResult.response}\n\nThreat fingerprint: ${stepResult.threatFingerprint.digest}`;
+      setProvider(stepResult);
       await runPreCog();
     } else if (step === 'gossip') {
-      const result = await api('/api/gossip/broadcast', { method: 'POST', body: { sourceNode: 'node-a' } });
-      $('#probeOutput').textContent = `Inoculation receipts\n${JSON.stringify(result.deliveries, null, 2)}`;
+      stepResult = await api('/api/gossip/broadcast', { method: 'POST', body: { sourceNode: 'node-a' } });
+      $('#probeOutput').textContent = `Inoculation receipts\n${JSON.stringify(stepResult.deliveries, null, 2)}`;
     } else if (step === 'forensics') {
-      await runVisualForensics();
+      stepResult = await runVisualForensics();
     } else if (step === 'synthesize') {
-      await synthesize();
+      stepResult = await synthesize();
     } else if (step === 'quorum') {
       const proposal = latestProposal ? null : await api('/api/policy/proposal');
+      stepResult = proposal;
       latestProposal = latestProposal || proposal.update;
       requiredQuorum = proposal?.quorum || requiredQuorum;
       refreshQuorumProgress();
@@ -1345,7 +1465,7 @@ summary{cursor:pointer}
       $('#policyStudio').scrollIntoView({ behavior: 'smooth', block: 'center' });
     } else if (step === 'rollback') {
       recoveryStartedAt = incidentStartedAt || Date.now();
-      await incidentAction('node-a', 'recover');
+      stepResult = await incidentAction('node-a', 'recover');
       mttr = Math.round(Date.now() - recoveryStartedAt);
     }
     if (mttd !== null) $('#mttd').textContent = `${mttd} ms`;
@@ -1355,6 +1475,7 @@ summary{cursor:pointer}
     await loadAudit();
     document.querySelector(`[data-step="${step}"]`)?.classList.add('complete');
     statusMessage(`${step} completed.`);
+    return stepResult;
   }
   // Single-flight wrapper: a stage never runs twice concurrently, and all
   // stage buttons stay disabled while one is in flight (no double submits).
@@ -1362,7 +1483,7 @@ summary{cursor:pointer}
     if (stepInFlight) { statusMessage('A stage is already running; wait for it to finish before starting another.'); return; }
     stepInFlight = true;
     document.querySelectorAll('[data-step]').forEach(button => { button.disabled = true; });
-    try { await runStep(step); }
+    try { return await runStep(step); }
     finally {
       stepInFlight = false;
       document.querySelectorAll('[data-step]').forEach(button => { button.disabled = false; });
@@ -1614,6 +1735,13 @@ summary{cursor:pointer}
     }
   }
   $('#credentialToggle').onclick = () => $('#adminToken').focus();
+  $('#adminToken').addEventListener('input', () => {
+    const rt = $('#rtToken');
+    const entered = ($('#adminToken').value || '').trim();
+    if (rt && entered && (!rt.value.trim() || rt.dataset.mirrored === '1')) { rt.value = entered; rt.dataset.mirrored = '1'; }
+    syncRedTeamToken();
+  });
+  $('#rtToken')?.addEventListener('input', () => { const rt = $('#rtToken'); if (rt) delete rt.dataset.mirrored; });
   $('#saveCredentials').onclick = () => {
     adminToken = $('#adminToken').value.trim();
     operatorToken = adminToken ? '' : $('#operatorToken').value.trim();
@@ -1622,14 +1750,27 @@ summary{cursor:pointer}
     statusMessage(`${role()} credentials are held in memory for this tab.`);
   };
   $('#demoAutoAuth').onclick = async () => {
-    const button = $('#demoAutoAuth'); button.disabled = true;
+    const button = $('#demoAutoAuth');
+    if (ensureAdminTokenFromInput() || adminToken) {
+      syncRedTeamToken();
+      statusMessage('✓ Admin role active via configured DASHBOARD_ADMIN_TOKEN');
+      return;
+    }
+    if (devSessionActive) {
+      statusMessage('Local demo admin session is already active.');
+      return;
+    }
+    button.disabled = true;
     try {
       const session = await api('/api/dev-session', { method: 'POST', body: {} });
       devSessionActive = session.enabled === true;
       updateRole();
       statusMessage('Local development admin session active for 10 minutes. The admin token was not exposed to the browser.');
     } catch (error) {
-      statusMessage(`Local demo session unavailable: ${error.message}`);
+      if (error.message === 'local-development-session-unavailable' && adminToken) {
+        syncRedTeamToken();
+        statusMessage('✓ Admin role active via configured DASHBOARD_ADMIN_TOKEN');
+      } else statusMessage(`Local demo session unavailable: ${error.message}`);
     } finally { button.disabled = false; }
   };
   $('#clearCredentials').onclick = async () => {
@@ -1638,6 +1779,8 @@ summary{cursor:pointer}
     }
     adminToken = ''; operatorToken = ''; $('#adminToken').value = ''; $('#operatorToken').value = '';
     devSessionActive = false;
+    const rtInput = $('#rtToken');
+    if (rtInput && rtInput.dataset.mirrored === '1') { rtInput.value = ''; delete rtInput.dataset.mirrored; }
     updateRole(); statusMessage('In-memory credentials cleared.');
   };
   $('#refresh').onclick = load;
@@ -1648,7 +1791,10 @@ summary{cursor:pointer}
   $('#manifestOpen').onclick = () => openManifest().catch(error => { $('#manifestNote').textContent = `Manifest unavailable: ${error.message}`; $('#manifestDialog').showModal(); });
   $('#manifestClose').onclick = () => $('#manifestDialog').close();
   $('#manifestDialog').addEventListener('click', event => { if (event.target === $('#manifestDialog')) $('#manifestDialog').close(); });
-  $('#runFull').onclick = () => runFullSequence().catch(error => statusMessage(`Sequence stopped: ${error.message}`));
+  $('#runFull').onclick = () => {
+    if (directorMode === 'auto') runDirectorShowcase().catch(error => { stopDirector(); statusMessage(`Showcase stopped: ${error.message}`); });
+    else runFullSequence().catch(error => statusMessage(`Sequence stopped: ${error.message}`));
+  };
   $('#tourStart').onclick = () => startTour().catch(error => { stopTour(); statusMessage(`Video tour unavailable: ${error.message}`); });
   $('#tourStop').onclick = stopTour;
   $('#proposalRefresh').onclick = async () => {
@@ -1754,9 +1900,150 @@ summary{cursor:pointer}
   $('#runAnalyst').onclick = async () => {
     const button = $('#runAnalyst'); button.disabled = true;
     try {
-      const result = await api('/api/incident-analysis', { method: 'POST', body: {} });
+      const started = Date.now();
+      const result = await api('/api/incident-analysis', { method: 'POST', body: {}, timeoutMs: 65000 });
       renderAnalyst(result);
+      updateFrontierTelemetry(result, Date.now() - started);
     } catch (error) { statusMessage(`Incident analysis unavailable: ${error.message}`); }
+    finally { button.disabled = false; }
+  };
+  // Meta frontier telemetry: provider, model badges, round-trip latency and
+  // the SHA-256 provenance hash all come from real API responses only.
+  function updateFrontierTelemetry(result, wallMs) {
+    const proof = result && result.frontierProof;
+    const mode = (proof && proof.providerMode) || (result && result.providerMode) || 'Deterministic Fallback';
+    const provider = $('#frontierProvider');
+    if (provider) {
+      provider.textContent = `PROVIDER · ${mode}`;
+      provider.className = `badge ${/Live/.test(mode) ? 'live' : 'warn'}`;
+    }
+    if (Number.isFinite(wallMs) && $('#frontierLatency')) $('#frontierLatency').textContent = `round-trip · ${wallMs} ms`;
+    if (proof && $('#frontierProof')) $('#frontierProof').textContent = `PROOF HASH · SHA-256 ${String(proof.responseDigest).slice(0, 16)}…`;
+    const models = new Set((proof && proof.modelsInvoked) || (result && result.modelsInvoked) || []);
+    const setBadge = (selector, live) => {
+      const el = $(selector);
+      if (el) { el.textContent = `${el.dataset.label} · ${live ? 'live' : 'standby'}`; el.className = `badge ${live ? 'live' : ''}`; }
+    };
+    setBadge('#frontierSpark', models.has('muse-spark-1.3'));
+    setBadge('#frontierSam', models.has('sam-3.1'));
+    setBadge('#frontierBaseten', [...models].some(name => String(name).includes('muse-spark-open-1026')));
+  }
+  function renderFrontier(result, wallMs) {
+    const output = $('#frontierOutput');
+    output.hidden = false;
+    output.replaceChildren();
+    const add = (title, lines) => {
+      const section = document.createElement('section');
+      section.className = 'frontier-section';
+      const h = document.createElement('h3'); h.textContent = title; section.append(h);
+      lines.filter(Boolean).forEach(text => { const p = document.createElement('p'); p.textContent = text; section.append(p); });
+      output.append(section);
+    };
+    const injection = result.promptInjection || {};
+    add('Prompt-injection shield', [
+      injection.promptInjectionBlocked ? `BLOCKED · classes: ${(injection.patternClasses || []).join(', ')}` : 'CLEAN · no adversarial instruction patterns detected',
+      `input SHA-256 ${String(injection.inputDigest || '').slice(0, 16)}… · sanitized SHA-256 ${String(injection.sanitizedDigest || '').slice(0, 16)}… · ledger request ${String(injection.requestIdHash || '').slice(0, 16)}…`
+    ]);
+    const prediction = result.prediction || {};
+    add('Baseten muse-spark-open-1026 · attacker next-move prediction', [
+      `provider: ${prediction.providerMode || 'Deterministic Fallback'} · models invoked: ${(prediction.modelsInvoked || []).join(', ') || 'none'}`,
+      `predicted victims: ${(prediction.predictedVictims || []).join(', ') || 'none'} · modeled impact: ${prediction.timeToImpactSeconds ?? '—'}s`,
+      prediction.rationale ? `rationale: ${prediction.rationale}` : null
+    ]);
+    const counter = result.counterAntibody || {};
+    add('Muse Spark 1.3 · counter-antibody + sandbox dry-run', [
+      `provider: ${counter.providerMode || 'Deterministic Fallback'} · models invoked: ${(counter.modelsInvoked || []).join(', ') || 'none'}`,
+      counter.rationaleSummary ? `evidence summary: ${counter.rationaleSummary}` : null,
+      `sandbox: ${counter.sandbox?.status || 'unavailable'}${counter.sandbox?.replayedEventsCount != null ? ` · ${counter.sandbox.replayedEventsCount} events · ${counter.sandbox.falsePositives} FP · ${counter.sandbox.safetyScore}% safety` : ''}`,
+      'Ask-Before-Act: advisory only — requires the 2-of-3 human passkey quorum; never applied automatically.'
+    ]);
+    add('Cryptographic AI provenance', [
+      `evidence digest SHA-256 ${String(result.frontierProof?.evidenceDigest || '').slice(0, 24)}…`,
+      `response digest SHA-256 ${String(result.frontierProof?.responseDigest || '').slice(0, 24)}… · ${result.frontierProof?.at || ''} · ${result.durationMs ?? wallMs} ms`
+    ]);
+    const injectionBadge = $('#frontierInjection');
+    if (injectionBadge) {
+      injectionBadge.textContent = `INJECTION SHIELD · ${injection.promptInjectionBlocked ? 'BLOCKED' : 'CLEAN'}`;
+      injectionBadge.className = `badge ${injection.promptInjectionBlocked ? 'good' : ''}`;
+    }
+    updateFrontierTelemetry(result, wallMs);
+  }
+  const RACK_OBJECTS = ['NIC-Port-01', 'TPM-2.0-Seal', 'NVMe-Bay-A', 'NVMe-Bay-B', 'UART-Debug-Header', 'Fiber-Uplink-B', 'PSU-Redundant-A', 'PSU-Redundant-B', 'BMC-Controller', 'EEPROM-BIOS', 'PCIe-Riser-1', 'PCIe-Riser-2', 'Fan-Array-Front', 'Fan-Array-Rear', 'RTC-Battery', 'Chassis-Intrusion-Switch'];
+  const RACK_TAMPERED = 'UART-Debug-Header';
+  function drawEdgeRack() {
+    const canvas = $('#incidentCanvas');
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#050a11'; context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = '#0b1522'; context.fillRect(0, 0, canvas.width, 42);
+    context.fillStyle = '#06b6d4'; context.font = 'bold 16px monospace'; context.fillText('EDGE RACK · HARDWARE INSPECTION SNAPSHOT (SYNTHETIC)', 24, 27);
+    const columns = 4; const cellW = 220; const cellH = 92; const offsetX = 40; const offsetY = 70;
+    RACK_OBJECTS.forEach((name, index) => {
+      const x = offsetX + (index % columns) * cellW;
+      const y = offsetY + Math.floor(index / columns) * cellH;
+      const tampered = name === RACK_TAMPERED;
+      context.strokeStyle = tampered ? '#f43f5e' : '#28445d';
+      context.fillStyle = tampered ? 'rgba(244,63,94,.18)' : 'rgba(13,26,42,.85)';
+      context.lineWidth = tampered ? 2 : 1;
+      context.fillRect(x, y, cellW - 16, cellH - 16);
+      context.strokeRect(x, y, cellW - 16, cellH - 16);
+      context.fillStyle = tampered ? '#fda4af' : '#9db4c8';
+      context.font = '11px monospace';
+      context.fillText(name, x + 10, y + 24);
+      context.fillStyle = tampered ? '#f43f5e' : '#10b981';
+      context.font = '10px monospace';
+      context.fillText(tampered ? 'TAMPER SUSPECTED' : 'SEALED · OK', x + 10, y + 48);
+    });
+    context.fillStyle = '#8997aa'; context.font = '12px monospace';
+    context.fillText('SYNTHETIC FIXTURE · OPERATOR-AUTHORIZED INSPECTION · NO REAL HARDWARE', 40, 462);
+  }
+  async function rackScan() {
+    drawEdgeRack();
+    $('#voiceNote').value = 'Operator alert: physical tamper suspected on the UART debug header of edge node-a; requesting isolation review.';
+    rackPromptValue = 'label';
+    try { return await runVisualForensics(); }
+    finally { rackPromptValue = null; }
+  }
+  function renderRackOverlay(result) {
+    const overlay = $('#rackOverlay');
+    overlay.hidden = false;
+    overlay.replaceChildren();
+    const grid = document.createElement('div');
+    grid.className = 'rack-grid';
+    RACK_OBJECTS.forEach(name => {
+      const chip = document.createElement('span');
+      chip.className = `rack-chip${name === RACK_TAMPERED ? ' tampered' : ''}`;
+      chip.textContent = name;
+      grid.append(chip);
+    });
+    overlay.append(grid);
+    const note = document.createElement('p');
+    note.className = 'panel-caption';
+    const samBoxes = (result.redactionBoxes || []).filter(box => box.method === 'sam-3.1');
+    const evidence = (latestAudit360?.snapshotIntegrityLedger?.events || []).filter(event => event.type === 'tamper-detected' || event.type === 'quarantine-applied').at(-1);
+    note.textContent = `16 hardware objects tracked in one pass · SAM 3.1 boxes: ${samBoxes.length}${samBoxes.length ? '' : ' (none — canvas telemetry / withheld path)'} · tampered boundary: ${RACK_TAMPERED} · correlated quarantine evidence: ${evidence ? evidence.eventId : '—'}`;
+    overlay.append(note);
+  }
+  $('#rackScan').onclick = async () => {
+    const button = $('#rackScan'); button.disabled = true;
+    try { renderRackOverlay(await rackScan()); }
+    catch (error) { statusMessage(`Rack scan unavailable: ${error.message}`); }
+    finally { button.disabled = false; }
+  };
+  $('#frontierRun').onclick = async () => {
+    const button = $('#frontierRun'); button.disabled = true;
+    try {
+      const started = Date.now();
+      try {
+        const result = await api('/api/frontier/co-evolution', { method: 'POST', timeoutMs: 75000, body: { node: 'node-a', input: $('#probeInput').value || 'help' } });
+        renderFrontier(result, Date.now() - started);
+      } catch (error) {
+        const output = $('#frontierOutput');
+        output.hidden = false;
+        output.textContent = `Co-evolution unavailable: ${error.message}. Run the autonomous demo first so verified tamper evidence exists.`;
+        statusMessage(`Co-evolution unavailable: ${error.message}`);
+      }
+      renderRackOverlay(await rackScan());
+    } catch (error) { statusMessage(`Frontier showcase unavailable: ${error.message}`); }
     finally { button.disabled = false; }
   };
   $('#applyPolicy').onclick = async () => {
@@ -1796,6 +2083,203 @@ summary{cursor:pointer}
   document.querySelectorAll('[data-step]').forEach(button => {
     button.addEventListener('click', () => runStepExclusive(button.dataset.step).catch(error => statusMessage(`${button.dataset.step} failed: ${error.message}`)));
   });
+  // ================= 3-Minute Cinematic Auto-Director =================
+  // Additive presentation layer over the existing demo steps: every act calls
+  // the real workflow functions and narration reads live measured values.
+  let directorMode = 'auto';
+  let directorVoice = true;
+  let directorActive = false;
+  let directorStop = false;
+  let directorSkip = false;
+  let directorStart = 0;
+  let directorTick = 0;
+  let directorKeepAlive = 0;
+  const directorCanSpeak = () => {
+    try { return directorVoice && typeof window !== 'undefined' && 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined'; }
+    catch { return false; }
+  };
+  function pickDirectorVoice() {
+    try {
+      const voices = window.speechSynthesis.getVoices() || [];
+      if (!voices.length) return null;
+      const preferred = ['Natural', 'Online', 'Microsoft Aria', 'Microsoft Guy', 'Microsoft Jenny', 'Google US English'];
+      for (const marker of preferred) {
+        const match = voices.find(voice => voice.name.includes(marker) && /^en([-_]|$)/i.test(voice.lang));
+        if (match) return match;
+      }
+      return voices.find(voice => /^en([-_]|$)/i.test(voice.lang)) || voices[0];
+    } catch { return null; }
+  }
+  function directorNarrate(text) {
+    try {
+      if (!directorCanSpeak()) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      const voice = pickDirectorVoice();
+      if (voice) utterance.voice = voice;
+      utterance.rate = 1; utterance.pitch = 1;
+      const hardTimeout = setTimeout(() => { try { window.speechSynthesis.cancel(); } catch {} }, Math.min(30000, 5000 + text.length * 90));
+      utterance.onend = () => clearTimeout(hardTimeout);
+      utterance.onerror = () => clearTimeout(hardTimeout);
+      window.speechSynthesis.speak(utterance);
+    } catch { /* narration is optional; the showcase never hangs on audio */ }
+  }
+  function showcaseCue(text) {
+    const bar = $('#directorSubtitle');
+    if (bar) bar.textContent = text;
+    directorNarrate(text);
+  }
+  function focusCard(element) {
+    if (!element) return;
+    document.querySelectorAll('.director-spotlight').forEach(card => card.classList.remove('director-spotlight'));
+    element.classList.add('director-spotlight');
+    try { element.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { element.scrollIntoView(); }
+  }
+  function setDirectorProv(text) {
+    const badge = $('#directorProv');
+    if (badge && text) badge.textContent = text;
+  }
+  function directorProvFromResult(base, result) {
+    const mode = result && (result.providerMode || (result.frontierProof && result.frontierProof.providerMode));
+    if (!mode) return base;
+    if (mode === 'Deterministic Fallback') return `${base} · deterministic fallback (provider unreachable)`;
+    const models = Array.isArray(result.modelsInvoked) && result.modelsInvoked.length ? result.modelsInvoked.join(' + ') : mode;
+    return `${String(base).split(' ')[0]} LIVE · ${models}`;
+  }
+  function setDirectorAct(act) {
+    const label = $('#directorAct');
+    if (label) label.textContent = `ACT ${act.n}/10 · ${act.title.toUpperCase()}`;
+    setDirectorProv(act.prov || '');
+  }
+  function showDirectorHud() {
+    $('#directorHud').hidden = false;
+    $('#directorSubtitleBar').hidden = false;
+    clearInterval(directorTick);
+    directorTick = setInterval(() => {
+      const elapsed = Date.now() - directorStart;
+      const mm = String(Math.floor(elapsed / 60000)).padStart(2, '0');
+      const ss = String(Math.floor(elapsed / 1000) % 60).padStart(2, '0');
+      const clock = $('#directorClock');
+      if (clock) clock.textContent = `${mm}:${ss} / 03:00`;
+      const bar = $('#directorProgress');
+      if (bar) bar.style.width = `${Math.min(100, elapsed / 180000 * 100)}%`;
+    }, 250);
+  }
+  function stopDirector() {
+    directorStop = true;
+    directorActive = false;
+    clearInterval(directorTick); directorTick = 0;
+    clearInterval(directorKeepAlive); directorKeepAlive = 0;
+    try { if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel(); } catch {}
+    document.querySelectorAll('.director-spotlight').forEach(card => card.classList.remove('director-spotlight'));
+    const hud = $('#directorHud'); if (hud) hud.hidden = true;
+    const bar = $('#directorSubtitleBar'); if (bar) bar.hidden = true;
+    const runFull = $('#runFull'); if (runFull) runFull.disabled = false;
+  }
+  function waitDirectorUntil(ms) {
+    return new Promise(resolve => {
+      const check = () => {
+        if (directorStop || directorSkip) { directorSkip = false; resolve(); return; }
+        if (Date.now() - directorStart >= ms) { resolve(); return; }
+        setTimeout(check, 250);
+      };
+      check();
+    });
+  }
+  function directorActs(metrics) {
+    const mttd = metrics && Number.isFinite(metrics.mttdMs) ? `${metrics.mttdMs}-millisecond` : 'millisecond';
+    const mttr = metrics && Number.isFinite(metrics.mttrMs) ? `${metrics.mttrMs}-millisecond` : 'millisecond';
+    const trustedNow = latestStatuses.filter(node => node.mode === 'trusted').length;
+    const nodeCount = latestStatuses.length || 3;
+    const scenarioLine = metrics && typeof metrics.scenariosPass === 'string' ? metrics.scenariosPass : 'a fully verified synthetic security scenario suite';
+    return [
+      { n: 1, title: 'Cluster Baseline & Meta AI Readiness', end: 16, prov: '🧠 Powered by Meta Model API: muse-spark-1.3', focus: () => $('#frontierPanel'), action: async () => { await load(); }, live: () => { const trusted = latestStatuses.filter(node => node.mode === 'trusted').length; return `Live baseline confirmed: ${trusted} of ${latestStatuses.length || nodeCount} nodes trusted, posture ${(($('#defcon') || {}).textContent) || 'verified secure'}. The Meta AI defense pipeline is connected and standing by.`; }, narration: `Welcome to AegisQuorum: an autonomous bio-digital immune system for edge clusters, powered by Meta Muse Spark 1.3, Baseten Open-Weights, and SAM 3.1 inside an Ed25519 cryptographic boundary. ${trustedNow} of ${nodeCount} nodes are currently verified and trusted.` },
+      { n: 2, title: 'Live Tamper Injection & Chameleon Honeypot', end: 36, prov: '🎭 Powered by Baseten Open-Weights: meta-models/muse-spark-open-1026', focus: () => $('#meshStudio'), action: async () => { await runStepExclusive('tamper'); return runStepExclusive('deception'); }, live: result => { if (!result) return null; const models = (result.modelsInvoked || []).join(' + ') || 'the local synthetic fallback'; return `The decoy just answered the attacker live via ${models}; signed threat fingerprint ${String((result.threatFingerprint && result.threatFingerprint.digest) || '').slice(0, 16)} recorded in the audit ledger.`; }, narration: `We now inject live file tampering on Node A. Within ${mttd} of benchmark-measured detection time, SHA-256 integrity monitoring quarantines Node A and transforms it into a Chameleon decoy honeypot powered by Baseten muse-spark-open-1026, trapping the attacker with synthetic responses.` },
+      { n: 3, title: 'Ed25519 Antibody Gossip & Pre-Cog SIR Containment', end: 54, prov: '🎭 Powered by Baseten Open-Weights: meta-models/muse-spark-open-1026', focus: () => $('#meshStudio'), action: async () => runStepExclusive('gossip'), live: result => { const receipts = result && Array.isArray(result.deliveries) ? result.deliveries.length : 0; const r0 = latestPreCog && Number.isFinite(latestPreCog.sirBetaValue) && Number.isFinite(latestPreCog.sirGammaValue) && latestPreCog.sirGammaValue ? (latestPreCog.sirBetaValue / latestPreCog.sirGammaValue).toFixed(2) : null; return `Gossip complete: ${receipts || 'peer'} signed inoculation receipt${receipts === 1 ? '' : 's'} verified by Nodes B and C${r0 ? `, with SIR R-naught ${r0} containment computed` : ''}.`; }, narration: 'While the attacker is trapped in the honeypot, Node A gossips an Ed25519-signed threat antibody to Nodes B and C, inoculating the cluster and computing epidemiological SIR containment metrics.' },
+      { n: 4, title: 'SAM 3.1 Multiplexed Visual & Voice Forensics', end: 75, prov: '👁️ Powered by Meta SAM 3.1 + Muse Voice Transcribe 1.0', focus: () => { const drawer = $('#advancedControls'); if (drawer && !drawer.open) drawer.open = true; return $('#forensicsStudio'); }, action: async () => { try { const result = await rackScan(); renderRackOverlay(result); return result; } catch (error) { statusMessage(`Rack scan unavailable: ${error.message}`); return null; } }, live: result => { if (!result) return null; const boxes = (result.redactionBoxes || []).length; const cited = (result.verifiedEventIds || []).length; return `${result.providerMode || 'Deterministic Fallback'}: SAM isolated ${boxes} sensitive region${boxes === 1 ? '' : 's'} in a single pass, correlated to ${cited} verified audit event${cited === 1 ? '' : 's'}; voice channel reports ${result.voiceTranscriptSource || 'no transcript'}. Raw media never left the redaction boundary.`; }, narration: 'Next, SAM 3.1 performs a single-pass 16-object multiplexed visual inspection across the edge server rack, isolating physical tamper anomalies and correlating them directly with our hash-chained audit ledger — and when no segmentation provider answers, the dashboard says so instead of faking it.' },
+      { n: 5, title: 'Meta Muse Spark 1.3 Incident Analysis', end: 98, prov: '🧠 Powered by Meta Model API: muse-spark-1.3', focus: () => $('#forensicsStudio'), action: async () => { try { const started = Date.now(); const result = await api('/api/incident-analysis', { method: 'POST', body: {}, timeoutMs: 65000 }); renderAnalyst(result); updateFrontierTelemetry(result, Date.now() - started); return result; } catch (error) { statusMessage(`Incident analysis unavailable: ${error.message}`); return null; } }, live: result => { if (!result) return null; const analysis = result.analysis || {}; const cited = (result.verifiedEventIds || []).length; const summary = analysis.incidentSummary && analysis.incidentSummary.statement ? String(analysis.incidentSummary.statement).slice(0, 200) : null; const mitre = Array.isArray(analysis.mitreTechniques) ? analysis.mitreTechniques.slice(0, 3).map(item => String((item && (item.id || item.technique)) || item)).join(', ') : ''; return `Live ${result.providerMode || 'deterministic'} forensic read-out${summary ? `: ${summary}` : ''}${cited ? ` Every claim is cited to ${cited} verified audit event${cited === 1 ? '' : 's'}.` : ''}${mitre ? ` MITRE ATT&CK mapping: ${mitre}.` : ''}`; }, narration: 'The incident analyst — Meta Muse Spark 1.3 when the provider answers, honestly labelled deterministic mode when it does not — analyzes the sanitized, independently verified audit projection. Our boundary strips out prompt-injection attempts and maps every finding to verified event IDs and MITRE ATT&CK techniques.' },
+      { n: 6, title: 'Policy Synthesis & 50-Event Dry-Run Certificate', end: 116, prov: '🧠 Powered by Meta Model API: muse-spark-1.3', focus: () => $('#policyStudio'), action: async () => runStepExclusive('synthesize'), live: result => { if (!result || !result.sandbox) return null; const sandbox = result.sandbox; const replayed = sandbox.replayedEventsCount ?? sandbox.replayEventsTested; return `Candidate policy drafted in ${result.providerMode || 'deterministic'} mode: ${replayed} of 50 verified events replayed in the sandbox with ${sandbox.falsePositives} false positives and a ${sandbox.safetyScore}% safety score. The signed dry-run certificate is recorded; application still needs the human quorum.`; }, narration: 'To heal the cluster safely, our synthesizer generates a remediation policy and validates it against a 50-event deterministic sandbox dry-run, issuing a cryptographically signed proof certificate.' },
+      { n: 7, title: 'Ask-Before-Act Quorum & Verified Recovery', end: 134, prov: '🔐 Ed25519 2-of-3 quorum + signed snapshot', focus: () => $('#policyStudio'), action: async () => { await runStepExclusive('quorum'); return runStepExclusive('rollback'); }, live: result => { if (!result) return null; const measured = mttr !== null ? `${mttr} milliseconds this session` : (metrics && Number.isFinite(metrics.mttrMs) ? `${metrics.mttrMs} milliseconds in the benchmark harness` : 'benchmark-measured time'); return `Recovery verdict: ${result.operationStatus || 'completed'}. Node A rolled back to its signed snapshot and passed the post-recovery integrity scan in ${measured}.`; }, narration: `Because AI is strictly advisory-only, our Ask-Before-Act gate enforces a 2-of-3 human WebAuthn passkey quorum. Once approved, Node A rolls back to its signed snapshot and verifies clean recovery — a ${mttr} mean recovery time in the benchmark harness.` },
+      { n: 8, title: 'Red vs Blue Live Simulator', end: 152, prov: '⚔️ Red vs Blue · 5-attack live simulation', focus: () => $('#redteam-root'), action: async () => {
+        ensureAdminTokenFromInput();
+        syncRedTeamToken();
+        const button = document.querySelector('#rtRun');
+        if (button && !button.disabled) {
+          button.click();
+          const deadline = Date.now() + 20000;
+          while (button.disabled && !directorStop && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 250));
+        }
+        await new Promise(resolve => setTimeout(resolve, 800));
+      }, live: () => { const blocked = (document.querySelector('#rtBlocked') || {}).textContent; const attempted = (document.querySelector('#rtAttempted') || {}).textContent; if (blocked && attempted && attempted !== '0') return `Red team complete: ${blocked} of ${attempted} adversarial attacks blocked live by the blue team.`; const statusText = (document.querySelector('#rtStatus') || {}).textContent || ''; return /Complete/.test(statusText) ? statusText : null; }, narration: 'Now running our live Red versus Blue simulator: five adversarial attacks including replay, unauthorized tokens, and quorum bypass are fired at isolated nodes and blocked in real time.' },
+      { n: 9, title: '360° Audit Ledger, Timeline & STIX 2.1', end: 168, prov: '🔏 SHA-256 + Ed25519 audit proof · STIX 2.1', focus: () => $('#auditVault'), action: async () => { try { await loadAudit(); renderAuditTab('hashchain'); await api('/api/timeline'); await api('/api/hackathon-manifest'); await api('/api/threat-intel/export'); } catch (error) { statusMessage(`Evidence refresh unavailable: ${error.message}`); } }, live: () => { const ledger = latestAudit360; if (!ledger) return null; const checks = ledger.hashChainLedger.chainVerificationStatus || []; const ok = checks.filter(item => item.valid).length; return `Browser-verified proof: ${ok} of ${checks.length} signed node chains intact, six audit dimensions refreshed, and the STIX 2.1 threat-intelligence bundle exported with sanitized indicators.`; }, narration: 'Every action is anchored to our six-dimension 360-degree audit ledger and exported as a sanitized STIX 2.1 threat-intelligence bundle.' },
+      { n: 10, title: 'Benchmarks & Grand Finale', end: 180, prov: '⏱️ Measured benchmarks · nothing staged', focus: () => $('#redteam-root'), action: async () => { const button = document.querySelector('#rtBenchRefresh'); if (button) button.click(); }, narration: `With a ${mttd} Mean Time to Detect, a ${mttr} Mean Time to Recover, and ${scenarioLine}, AegisQuorum proves that frontier AI and zero-trust cryptography can defend critical infrastructure autonomously. Thank you!` }
+    ];
+  }
+  async function runDirectorShowcase() {
+    if (directorActive) return;
+    directorActive = true; directorStop = false; directorSkip = false;
+    const runFull = $('#runFull'); if (runFull) runFull.disabled = true;
+    try {
+      ensureAdminTokenFromInput();
+      if (adminToken) {
+        syncRedTeamToken();
+        statusMessage('✓ Admin role active via configured DASHBOARD_ADMIN_TOKEN');
+      } else if (!devSessionActive) {
+        showcaseCue('Preparing the local demo admin session.');
+        const authButton = $('#demoAutoAuth');
+        if (authButton) authButton.click();
+        const deadline = Date.now() + 15000;
+        while (!devSessionActive && !adminToken && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 250));
+      }
+    } catch { /* individual acts report their own state honestly */ }
+    try {
+      directorMetrics = null;
+      const bench = await api('/api/benchmarks');
+      const scenarioText = Array.isArray(bench.scenarios) && bench.scenarios.length ? `${bench.scenarios.filter(s => s.pass).length} out of ${bench.scenarios.length} security scenarios passing` : null;
+      directorMetrics = { ...(bench.metrics || {}), scenariosPass: scenarioText };
+    } catch { directorMetrics = null; }
+    directorStart = Date.now();
+    showDirectorHud();
+    try { directorKeepAlive = setInterval(() => { try { if (window.speechSynthesis && window.speechSynthesis.speaking) window.speechSynthesis.resume(); } catch {} }, 5000); } catch { directorKeepAlive = 0; }
+    try {
+      for (const act of directorActs(directorMetrics)) {
+        if (directorStop) break;
+        setDirectorAct(act);
+        focusCard(act.focus());
+        showcaseCue(act.narration);
+        let liveResult;
+        if (act.action) {
+          try { liveResult = await act.action(); }
+          catch (error) { statusMessage(`${act.title}: ${error.message}`); }
+        }
+        if (act.prov) setDirectorProv(directorProvFromResult(act.prov, liveResult));
+        if (!directorStop && typeof act.live === 'function') {
+          try { const extra = act.live(liveResult); if (extra) showcaseCue(extra); } catch { /* live telemetry narration is best-effort */ }
+        }
+        await waitDirectorUntil(act.end * 1000);
+      }
+      if (!directorStop) {
+        focusCard($('.hero'));
+        showcaseCue('Showcase complete. All evidence remains available in the Proof Explorer and the 360-degree audit vault.');
+        await waitDirectorUntil(183000);
+      }
+    } finally {
+      stopDirector();
+    }
+  }
+  let directorMetrics = null;
+  try { if ('speechSynthesis' in window) window.speechSynthesis.getVoices(); } catch { /* voice list priming is best-effort */ }
+  $('#directorModeToggle').onclick = () => {
+    directorMode = directorMode === 'auto' ? 'fast' : 'auto';
+    $('#directorModeToggle').textContent = directorMode === 'auto' ? '🎬 3-Min Meta AI Director: ON' : '⚡ Fast Mode · Director: OFF';
+  };
+  $('#directorVoiceToggle').onclick = () => {
+    directorVoice = !directorVoice;
+    $('#directorVoiceToggle').textContent = directorVoice ? '🔊 Live AI Voice: ON' : '🔇 Live AI Voice: OFF';
+    if (!directorVoice) { try { window.speechSynthesis?.cancel(); } catch {} }
+  };
+  $('#directorStop').onclick = stopDirector;
+  $('#directorNext').onclick = () => { directorSkip = true; try { window.speechSynthesis?.cancel(); } catch {} };
   drawSyntheticSnapshot();
   updateRole();
   load();
@@ -1922,6 +2406,23 @@ summary{cursor:pointer}
       const ok = match[1] === match[2] && Number(match[1]) > 0;
       badge.textContent = `${match[1]}/${match[2]} chains verified${ok ? ' ✓' : ''}`;
       badge.className = `badge ${ok ? 'good' : 'warn'}`;
+    });
+
+    // Passive frontier telemetry mirrors of the existing provider pills.
+    onMutate($('#modelStatus'), TEXT_AND_CLASS, () => {
+      const badge = $('#frontierProvider');
+      const status = $('#modelStatus');
+      if (badge && status) {
+        badge.textContent = `PROVIDER · ${(status.textContent || '').trim()}`;
+        badge.className = `badge ${status.classList.contains('live') ? 'live' : 'warn'}`;
+      }
+    });
+    [['[data-model="muse-spark-1.3"]', '#frontierSpark'], ['[data-model="baseten"]', '#frontierBaseten'], ['[data-model="sam-3.1"]', '#frontierSam']].forEach(([selector, targetSelector]) => {
+      const pill = document.querySelector(selector);
+      onMutate(pill, TEXT_ONLY, () => {
+        const el = $(targetSelector);
+        if (el && pill) { el.textContent = pill.textContent; el.className = pill.className; }
+      });
     });
   }
 

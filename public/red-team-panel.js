@@ -124,7 +124,11 @@
         ['Audit-chain verification (1000 events)', `${m.auditChainVerificationMs?.events1000} ms`],
         [`False positives over ${m.falsePositivesOverCleanScans?.cleanScans ?? 50} clean scans`, String(m.falsePositivesOverCleanScans?.falsePositives ?? '—')]
       ];
-      $('#rtBenchBody').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+      const esc = value => String(value).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+      const scenarios = Array.isArray(body.scenarios) ? body.scenarios : [];
+      if (scenarios.length) rows.push(['Synthetic scenarios passed', `${scenarios.filter(s => s.pass).length}/${scenarios.length}`]);
+      const scenarioRows = scenarios.map(s => [`${s.pass ? '✓' : '✗'} ${s.id}`, `expected ${s.expected} · actual ${s.actual} · ${s.durationMs} ms${s.evidenceRef ? ` · ${s.evidenceRef}` : ''}`]);
+      $('#rtBenchBody').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('') + scenarioRows.map(([k, v]) => `<tr><td class="${k.startsWith('✓') ? 'rt-blocked' : 'rt-passed'}">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
       $('#rtBenchTable').hidden = false;
       statusEl.textContent = `Generated ${body.generatedAt || 'unknown'} · isolated temporary state only.`;
     } catch (error) {

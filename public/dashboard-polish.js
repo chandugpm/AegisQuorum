@@ -115,6 +115,23 @@
       badge.textContent = `${match[1]}/${match[2]} chains verified${ok ? ' ✓' : ''}`;
       badge.className = `badge ${ok ? 'good' : 'warn'}`;
     });
+
+    // Passive frontier telemetry mirrors of the existing provider pills.
+    onMutate($('#modelStatus'), TEXT_AND_CLASS, () => {
+      const badge = $('#frontierProvider');
+      const status = $('#modelStatus');
+      if (badge && status) {
+        badge.textContent = `PROVIDER · ${(status.textContent || '').trim()}`;
+        badge.className = `badge ${status.classList.contains('live') ? 'live' : 'warn'}`;
+      }
+    });
+    [['[data-model="muse-spark-1.3"]', '#frontierSpark'], ['[data-model="baseten"]', '#frontierBaseten'], ['[data-model="sam-3.1"]', '#frontierSam']].forEach(([selector, targetSelector]) => {
+      const pill = document.querySelector(selector);
+      onMutate(pill, TEXT_ONLY, () => {
+        const el = $(targetSelector);
+        if (el && pill) { el.textContent = pill.textContent; el.className = pill.className; }
+      });
+    });
   }
 
   // ---------- C. Attack-to-recovery flow diagram ----------

@@ -6,6 +6,13 @@ A production-grade autonomous bio-digital defense grid built with Node.js. It co
 
 AegisQuorum is an autonomous "bio-digital immune system" for a three-node edge cluster. When tampering is detected, the affected node quarantines itself, becomes a Chameleon decoy honeypot, and gossips a signed threat antibody that inoculates its peers — while a human-gated 2-of-3 passkey quorum decides whether the AI-synthesized healing policy may apply. Every step is anchored to an Ed25519-signed, hash-chained audit ledger that can be verified independently.
 
+## 🌟 Meta Hackathon Frontier Innovations (Muse Spark 1.3 + Baseten + SAM 3.1)
+
+- **Dual-model adversarial co-evolution** (`POST /api/frontier/co-evolution`, admin-gated and replay-protected): a prompt-injection firewall classifies and strips adversarial instructions at the sanitization boundary and anchors a digest receipt to the signed security-event ledger; Baseten `meta-models/muse-spark-open-1026` predicts the attacker's next lateral move from verified audit evidence; `muse-spark-1.3` drafts the counter-antibody rationale. The candidate is dry-run in the node's 50-event sandbox and stays advisory behind the Ask-Before-Act 2-of-3 human quorum — it is never applied automatically.
+- **SAM 3.1 multiplexed edge-rack scan**: one click renders a synthetic 16-object hardware inspection frame and runs single-pass segmentation through `POST /api/visual-forensics`, correlating the tampered physical boundary with the signed quarantine event ID. When no segmentation provider is configured or reachable, the scan is withheld and labelled, never faked.
+- **Frontier telemetry strip**: live provider provenance (Meta Model API vs Baseten vs deterministic fallback), round-trip latency, and the SHA-256 `frontierProof` binding the sanitized evidence input to each model response.
+- **Proof-carrying recovery**: `GET /api/recovery/certificate` issues a portable evidence certificate for a completed recovery cycle; `npm run verify-recovery -- --certificate <file> --trusted-key <trust.json> [--snapshot <artifact.json>]` verifies it independently offline.
+
 ## Try it in 60 seconds
 
 ```bash
@@ -372,3 +379,13 @@ test/
 Dockerfile             Container image definition
 docker-compose.yml     Multi-service local deployment
 ```
+
+## License
+
+AegisQuorum is licensed under the [Apache License, Version 2.0](LICENSE).
+
+Copyright 2026 KADAGALA RAMACHANDRUDU
+
+Innovator & Creator: KADAGALA RAMACHANDRUDU
+
+See [NOTICE](NOTICE) for attribution and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for third-party license information. AegisQuorum uses only Node.js built-in modules at runtime; Node.js itself (MIT License) is required but not redistributed.
